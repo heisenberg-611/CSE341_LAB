@@ -1,0 +1,48 @@
+\contentsline {section}{\numberline {1}The 8086 mental model}{3}{section.1}%
+\contentsline {subsection}{\numberline {1.1}What is a microprocessor?}{3}{subsection.1.1}%
+\contentsline {subsection}{\numberline {1.2}The 8086 facts to remember}{3}{subsection.1.2}%
+\contentsline {subsection}{\numberline {1.3}Registers}{3}{subsection.1.3}%
+\contentsline {subsection}{\numberline {1.4}Number formats and character storage}{4}{subsection.1.4}%
+\contentsline {subsection}{\numberline {1.5}Variables and the data segment}{4}{subsection.1.5}%
+\contentsline {section}{\numberline {2}EMU8086 and the program template}{4}{section.2}%
+\contentsline {subsection}{\numberline {2.1}The supplied MASM-style template}{4}{subsection.2.1}%
+\contentsline {section}{\numberline {3}Instruction fundamentals}{5}{section.3}%
+\contentsline {subsection}{\numberline {3.1}MOV -- copy data}{5}{subsection.3.1}%
+\contentsline {subsection}{\numberline {3.2}ADD and SUB}{5}{subsection.3.2}%
+\contentsline {subsection}{\numberline {3.3}INC, DEC, NEG}{5}{subsection.3.3}%
+\contentsline {subsection}{\numberline {3.4}MUL -- unsigned multiplication}{6}{subsection.3.4}%
+\contentsline {subsection}{\numberline {3.5}DIV -- unsigned division}{6}{subsection.3.5}%
+\contentsline {subsection}{\numberline {3.6}Addressing mode vocabulary}{6}{subsection.3.6}%
+\contentsline {section}{\numberline {4}DOS input and output: INT 21H}{7}{section.4}%
+\contentsline {subsection}{\numberline {4.1}New line: carriage return and line feed}{7}{subsection.4.1}%
+\contentsline {subsection}{\numberline {4.2}ASCII conversions}{7}{subsection.4.2}%
+\contentsline {section}{\numberline {5}Flags: the foundation of decisions}{8}{section.5}%
+\contentsline {subsection}{\numberline {5.1}CF and OF are not the same}{8}{subsection.5.1}%
+\contentsline {subsection}{\numberline {5.2}Signed overflow rule}{8}{subsection.5.2}%
+\contentsline {subsection}{\numberline {5.3}Which instructions affect flags?}{8}{subsection.5.3}%
+\contentsline {section}{\numberline {6}CMP and conditional jumps}{9}{section.6}%
+\contentsline {subsection}{\numberline {6.1}CMP is a subtraction for flags only}{9}{subsection.6.1}%
+\contentsline {subsection}{\numberline {6.2}Jump table}{9}{subsection.6.2}%
+\contentsline {subsection}{\numberline {6.3}IF-THEN pattern}{9}{subsection.6.3}%
+\contentsline {subsection}{\numberline {6.4}IF-THEN-ELSE pattern}{9}{subsection.6.4}%
+\contentsline {subsection}{\numberline {6.5}CASE / multiway branch pattern}{10}{subsection.6.5}%
+\contentsline {section}{\numberline {7}Looping structures}{10}{section.7}%
+\contentsline {subsection}{\numberline {7.1}Explicit loop -- CMP and JMP}{10}{subsection.7.1}%
+\contentsline {subsection}{\numberline {7.2}Implicit loop -- LOOP and CX}{10}{subsection.7.2}%
+\contentsline {subsection}{\numberline {7.3}Repeat-until loop}{11}{subsection.7.3}%
+\contentsline {subsection}{\numberline {7.4}Nested loops}{11}{subsection.7.4}%
+\contentsline {section}{\numberline {8}Reusable coding patterns}{11}{section.8}%
+\contentsline {subsection}{\numberline {8.1}Read and convert one decimal digit}{11}{subsection.8.1}%
+\contentsline {subsection}{\numberline {8.2}Print one numeric digit}{12}{subsection.8.2}%
+\contentsline {subsection}{\numberline {8.3}Test even or odd}{12}{subsection.8.3}%
+\contentsline {subsection}{\numberline {8.4}Test divisibility}{12}{subsection.8.4}%
+\contentsline {subsection}{\numberline {8.5}Unsigned decimal printing concept}{12}{subsection.8.5}%
+\contentsline {section}{\numberline {9}High-frequency mistakes and how to avoid them}{12}{section.9}%
+\contentsline {section}{\numberline {10}Lab-by-lab checklist}{13}{section.10}%
+\contentsline {subsection}{\numberline {10.1}Lab 01 -- Introduction and basic arithmetic}{13}{subsection.10.1}%
+\contentsline {subsection}{\numberline {10.2}Lab 02 -- Basic I/O, advanced arithmetic, and flags}{13}{subsection.10.2}%
+\contentsline {subsection}{\numberline {10.3}Lab 03(A) -- Flow control and branching}{13}{subsection.10.3}%
+\contentsline {subsection}{\numberline {10.4}Lab 03(B) -- Looping structures}{13}{subsection.10.4}%
+\contentsline {section}{\numberline {11}Practice before checking the solution workbook}{13}{section.11}%
+\contentsline {section}{\numberline {12}Viva questions: one-line answers}{14}{section.12}%
+\contentsline {section}{\numberline {13}Final-night revision plan}{14}{section.13}%

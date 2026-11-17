@@ -1,0 +1,1869 @@
+\documentclass[10pt,a4paper]{article}
+\usepackage[margin=0.72in,headheight=15pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{booktabs,tabularx,longtable}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage{amssymb}
+\usepackage[most]{tcolorbox}
+\hypersetup{colorlinks=true,linkcolor=blue!55!black,urlcolor=blue!55!black}
+\definecolor{navy}{HTML}{16324F}
+\definecolor{codebg}{HTML}{F5F7FA}
+\pagestyle{fancy}\fancyhf{}\lhead{CSE341 -- 8086 Lab Mid}\rhead{Solved Exercises / Code Templates}\cfoot{\thepage}
+\setlist{nosep,leftmargin=*}\setlength{\parskip}{3pt}\setlength{\parindent}{0pt}
+\lstdefinestyle{asm}{language={},basicstyle=\ttfamily\footnotesize,backgroundcolor=\color{codebg},frame=single,rulecolor=\color{black!15},breaklines=true,columns=fullflexible,keepspaces=true,showstringspaces=false,tabsize=4}
+\newtcolorbox{noteBox}{colback=yellow!10,colframe=orange!60!black,boxrule=.6pt,arc=2mm}
+\newtcolorbox{answerBox}{colback=green!5,colframe=green!40!black,boxrule=.6pt,arc=2mm}
+\title{\Huge\bfseries 8086 Assembly Language\\[3pt]\Large Lab Midterm Solutions and Template Workbook\\[5pt]\normalsize Lab 01 through Lab 03(B) + Sample Midterm 1 and 2}
+\author{CSE341 -- Microprocessors}
+\date{Companion to the 8086 preparation workbook}
+\begin{document}
+\maketitle
+\begin{tcolorbox}[colback=navy!5,colframe=navy,title=How to use these answers]
+This file follows the supplied \texttt{Assembly Template.docx}. Unless a section says ``complete program'', code is organized as \textbf{DATA declarations} plus a \textbf{MAIN body}. Put declarations inside \texttt{.DATA}; put the main body after DS initialization and before the standard exit sequence. If a helper procedure is shown, place it after \texttt{MAIN ENDP} and before \texttt{END MAIN}. Each exercise is independent: do not paste every answer into one program.
+
+Most solutions use MASM/EMU8086-style syntax and DOS \texttt{INT 21H}. Values loaded directly into registers stand in for the stated input/initial-register condition. Where the lab statement is ambiguous or mathematically inconsistent, the assumption/correction is identified.
+\end{tcolorbox}
+\tableofcontents
+\newpage
+
+\section{Common template and reusable procedures}
+\subsection{Base template from the supplied DOCX}
+\begin{lstlisting}[style=asm]
+.MODEL SMALL
+.STACK 100H
+.DATA
+    ; declare variables and strings here
+.CODE
+MAIN PROC
+    MOV AX, @DATA
+    MOV DS, AX
+
+    ; paste one exercise's MAIN BODY here
+
+    MOV AX, 4C00H
+    INT 21H
+MAIN ENDP
+END MAIN
+\end{lstlisting}
+
+\subsection{Print an unsigned 16-bit decimal number}
+This procedure expects the number in AX. It handles 0 and prints digits in normal order by pushing remainders and popping them. It preserves BX, CX, DX.
+\begin{lstlisting}[style=asm]
+PRINT_U16 PROC
+    PUSH BX
+    PUSH CX
+    PUSH DX
+    CMP AX, 0
+    JNE PU_CONVERT
+    MOV DL, '0'
+    MOV AH, 2
+    INT 21H
+    JMP PU_DONE
+PU_CONVERT:
+    XOR CX, CX
+    MOV BX, 10
+PU_DIVIDE:
+    XOR DX, DX
+    DIV BX              ; AX=quotient, DX=remainder
+    PUSH DX
+    INC CX
+    CMP AX, 0
+    JNE PU_DIVIDE
+PU_OUTPUT:
+    POP DX
+    ADD DL, '0'
+    MOV AH, 2
+    INT 21H
+    LOOP PU_OUTPUT
+PU_DONE:
+    POP DX
+    POP CX
+    POP BX
+    RET
+PRINT_U16 ENDP
+\end{lstlisting}
+
+\subsection{Print a signed 16-bit decimal number}
+Expects the signed value in AX. The magnitude of -32768 is 32768, which the unsigned helper can print.
+\begin{lstlisting}[style=asm]
+PRINT_S16 PROC
+    PUSH AX
+    TEST AX, 8000H
+    JZ PS_POSITIVE
+    MOV DL, '-'
+    MOV AH, 2
+    INT 21H
+    POP AX
+    NEG AX
+    CALL PRINT_U16
+    RET
+PS_POSITIVE:
+    POP AX
+    CALL PRINT_U16
+    RET
+PRINT_S16 ENDP
+\end{lstlisting}
+
+\subsection{Print CR/LF}
+\begin{lstlisting}[style=asm]
+NEWLINE PROC
+    MOV DL, 0DH
+    MOV AH, 2
+    INT 21H
+    MOV DL, 0AH
+    MOV AH, 2
+    INT 21H
+    RET
+NEWLINE ENDP
+\end{lstlisting}
+
+\begin{noteBox}
+When a program uses a procedure, make sure the procedure is placed after \texttt{MAIN ENDP}. The procedures above are optional helpers; the lab's simplest one-character tasks do not need them. All code blocks are standalone exercise answers or bodies, not one single combined program.
+\end{noteBox}
+
+\section{Lab 01 -- Introduction and basic arithmetic}
+\subsection*{Task 01 -- Move AX to BX}
+\textbf{Given:} value already in AX. The problem is a register transfer, not keyboard text input.
+\begin{lstlisting}[style=asm]
+; MAIN body
+MOV AX, 1234H       ; sample initial value
+MOV BX, AX          ; BX receives AX
+\end{lstlisting}
+\textit{If the examiner literally asks for a keyboard character first:} use \texttt{AH=01H}, then zero-extend the ASCII byte if treating it as a byte value: \texttt{MOV AH,0 / MOV BX,AX}. Convert from ASCII first if it is a decimal digit.
+
+\subsection*{Task 02 -- Swap two numbers using at most three registers}
+\begin{lstlisting}[style=asm]
+MOV AX, 10
+MOV BX, 20
+MOV CX, AX
+MOV AX, BX
+MOV BX, CX
+; AX=20, BX=10
+\end{lstlisting}
+
+\subsection*{Task 03 -- Add two numbers using two registers}
+\begin{lstlisting}[style=asm]
+MOV AX, 25
+MOV BX, 17
+ADD AX, BX          ; AX=42
+\end{lstlisting}
+
+\subsection*{Task 04 -- Subtract two numbers}
+\begin{lstlisting}[style=asm]
+MOV AX, 3
+MOV BX, 5
+SUB AX, BX          ; AX=FFFEH (signed -2)
+; For unsigned subtraction, CF=1 indicates a borrow.
+\end{lstlisting}
+The numeric bit pattern is fixed-width. A negative signed answer appears as its two's-complement representation. It is not an ordinary unsigned magnitude.
+
+\subsection*{Task 05 -- Swap using ADD/SUB only}
+\begin{lstlisting}[style=asm]
+MOV AX, 5
+MOV BX, 10
+ADD AX, BX          ; AX = old AX + old BX
+SUB BX, AX          ; BX = -old AX
+NEG BX              ; BX = old AX
+SUB AX, BX          ; AX = old BX
+; AX=10, BX=5
+\end{lstlisting}
+This method can overflow if the sum cannot fit in the register width. A temporary register or XCHG is safer in ordinary programming.
+
+\subsection*{Task 06 -- Arithmetic expressions with variables}
+\begin{lstlisting}[style=asm]
+.DATA
+A DW 10
+B DW 5
+C DW ?
+.CODE
+; (1) A = B - A
+MOV AX, B
+SUB AX, A
+MOV A, AX
+
+; (2) A = -(A + 1)
+MOV AX, A
+INC AX
+NEG AX
+MOV A, AX
+
+; (3) C = A + (B + 1), using INC
+MOV AX, B
+INC AX
+ADD AX, A
+MOV C, AX
+
+; (4) A = B - (A - 1), using DEC
+MOV AX, A
+DEC AX
+MOV BX, B
+SUB BX, AX
+MOV A, BX
+\end{lstlisting}
+The expressions run sequentially, so each later part uses the updated A from the earlier part. Reset initial A and B before testing a specific sub-expression.
+
+\subsection*{Task 07 -- Multiplication and division}
+\begin{lstlisting}[style=asm]
+.DATA
+X DW 6
+Y DW 3
+Z DW 2
+RESULT DW ?
+.CODE
+; (1) X * Y
+MOV AX, X
+MUL Y               ; DX:AX = X*Y
+MOV RESULT, AX      ; low word if result fits in 16 bits
+
+; (2) X / Y
+MOV AX, X
+XOR DX, DX
+DIV Y               ; AX=quotient, DX=remainder
+MOV RESULT, AX
+
+; (3) X * Y / Z
+MOV AX, X
+MUL Y               ; preserve full product in DX:AX
+DIV Z               ; divide 32-bit product by Z
+MOV RESULT, AX      ; quotient
+\end{lstlisting}
+\textbf{Assumption:} Z is nonzero and final quotient fits in AX. The multiplication result is 32-bit; do not clear DX between MUL and DIV in part (3).
+
+\subsection*{Task 08 -- Hexadecimal arithmetic}
+\begin{enumerate}[label=\alph*)]
+\item \texttt{36DFH * AFH}: load AX=36DFH and BX=00AFH. Full product is DX:AX = \texttt{0025:8271H}.
+\item \texttt{F4D5H / C9A5H}: load AX=F4D5H, DX=0, BX=C9A5H; quotient AX=0001H and remainder DX=2B30H.
+\item \texttt{CA92H * BAF9H}: full product is DX:AX = \texttt{93F3:1C02H}.
+\item \texttt{C2A2H * ABCDH / BEDH}: the quotient is 000AF3D8H (20 bits) and remainder 0AC2H. A single 16-bit DIV cannot hold this quotient in AX; use the 32-bit-by-16-bit long-division routine below.
+\end{enumerate}
+\begin{lstlisting}[style=asm]
+; Reusable instruction pattern for each expression
+MOV AX, 36DFH
+MOV BX, 00AFH
+MUL BX              ; DX:AX = 36DFH * 00AFH
+
+MOV AX, 0F4D5H
+XOR DX, DX
+MOV BX, 0C9A5H
+DIV BX              ; AX=1, DX=2B30H
+
+MOV AX, 0CA92H
+MOV BX, 0BAF9H
+MUL BX              ; full result DX:AX
+
+MOV AX, 0C2A2H
+MOV BX, 0ABCDH
+MUL BX
+MOV PRODHI,DX        ; high word of product
+MOV PRODLO,AX        ; low word of product
+MOV DIVISOR,0BEDH
+; 32-bit dividend / 16-bit divisor, quotient may need 32 bits
+MOV QHI,0
+MOV QLO,0
+MOV REM16,0
+MOV CX,32
+T8_DIV32:
+    SHL PRODLO,1
+    RCL PRODHI,1     ; CF = next dividend bit
+    RCL REM16,1      ; REM16 = REM16*2 + next bit
+    SHL QLO,1
+    RCL QHI,1        ; shift quotient left
+    MOV AX,REM16
+    CMP AX,DIVISOR
+    JB T8_NO_SUB
+    SUB AX,DIVISOR
+    MOV REM16,AX
+    OR QLO,1
+T8_NO_SUB:
+    LOOP T8_DIV32
+; Expected QHI:QLO = 000A:F3D8H, REM16 = 0AC2H
+\end{lstlisting}
+\textbf{Add these declarations for the last subproblem:} \texttt{PRODHI, PRODLO, QHI, QLO, REM16, DIVISOR} as WORD variables. This long division works here because the intermediate remainder stays below 2*0BEDH and fits in 16 bits. Do not execute the ordinary \texttt{DIV CX} for this subproblem: the quotient 0AF3D8H exceeds FFFFH and would cause divide overflow.
+
+\subsection*{Task 09 -- Two MOV examples for each common operand combination}
+Assume these variables are declared: \texttt{WORD1 DW ?} and \texttt{BYTE1 DB ?}.
+\begin{lstlisting}[style=asm]
+; Register <- register
+MOV AX, BX
+MOV DL, CL
+; Register <- memory
+MOV AX, WORD1
+MOV BL, BYTE1
+; Memory <- register
+MOV WORD1, AX
+MOV BYTE1, BL
+; Register <- immediate
+MOV CX, 1234H
+MOV AL, 25
+; Memory <- immediate
+MOV WORD1, 100
+MOV BYTE1, 7
+\end{lstlisting}
+No memory-to-memory MOV is allowed. Also avoid mixing byte and word sizes.
+
+\subsection*{Task 10 -- Two ADD and SUB examples for each common combination}
+Use the same \texttt{WORD1} and \texttt{BYTE1} declarations from Task 09.
+\begin{lstlisting}[style=asm]
+; Register, register
+ADD AX, BX
+SUB CL, DL
+; Register, memory
+ADD AX, WORD1
+SUB AL, BYTE1
+; Memory, register
+ADD WORD1, BX
+SUB BYTE1, CL
+; Register, immediate
+ADD AX, 10
+SUB DL, 2
+; Memory, immediate
+ADD WORD1, 5
+SUB BYTE1, 1
+\end{lstlisting}
+The destination is always updated. Memory-to-memory arithmetic is invalid; move one memory operand into a register first.
+
+\subsection*{Task 11 -- Evaluate (1+2)*(3-1)/5+3+2-(1*2)}
+Integer division is used. The expression evaluates as $3\times2=6$, $6/5=1$, then $1+3+2-2=4$.
+\begin{lstlisting}[style=asm]
+MOV AX, 1
+ADD AX, 2           ; 3
+MOV BX, AX
+MOV AX, 3
+SUB AX, 1           ; 2
+MUL BX              ; DX:AX = 6
+MOV BX, 5
+DIV BX              ; AX = 1
+ADD AX, 3           ; 4
+ADD AX, 2           ; 6
+MOV BX, 1
+MOV CX, 2
+MOV AX, BX
+MUL CX              ; AX = 2
+MOV BX, AX
+; Restore the partial expression result if it was saved:
+; preferred complete approach uses stack:
+\end{lstlisting}
+\begin{lstlisting}[style=asm]
+; Complete version with PUSH/POP preserving the partial result
+MOV AX, 1
+ADD AX, 2           ; 3
+MOV BX, AX
+MOV AX, 3
+SUB AX, 1           ; 2
+MUL BX              ; product = 6 in AX (fits)
+MOV BX, 5
+XOR DX, DX
+DIV BX              ; integer quotient = 1
+ADD AX, 3
+ADD AX, 2           ; partial = 6
+PUSH AX
+MOV AX, 1
+MOV BX, 2
+MUL BX              ; 1*2 = 2
+MOV BX, AX
+POP AX
+SUB AX, BX          ; final AX=4
+\end{lstlisting}
+
+\section{Lab 02 -- Basic I/O, arithmetic, and flags}
+\subsection*{Task 01 -- Prompt, read, and display one character}
+\begin{lstlisting}[style=asm]
+.DATA
+MSG DB 'Please insert a character: $'
+.CODE
+; MAIN body
+LEA DX, MSG
+MOV AH, 9
+INT 21H
+MOV AH, 1
+INT 21H
+MOV BL, AL          ; preserve input
+MOV DL, BL
+MOV AH, 2
+INT 21H
+\end{lstlisting}
+
+\subsection*{Task 02 -- Input two digits; show add, subtract, multiply, divide}
+This complete MAIN body accepts one decimal digit per operand. Subtraction is displayed as a signed difference; division shows both quotient and remainder. Add the shown data declarations and use the shared \texttt{PRINT\_U16} helper.
+\begin{lstlisting}[style=asm]
+.DATA
+P1 DB 'First digit (0-9): $'
+P2 DB 0DH,0AH,'Second digit (0-9): $'
+M1 DB 0DH,0AH,'ADD = $'
+M2 DB 0DH,0AH,'SUB = $'
+M3 DB 0DH,0AH,'MUL = $'
+M4 DB 0DH,0AH,'DIV quotient = $'
+M5 DB ', remainder = $'
+ERR DB 0DH,0AH,'Cannot divide by zero.$'
+A DB ?
+B DB ?
+Q DB ?
+REMV DB ?
+.CODE
+LEA DX,P1
+MOV AH,9
+INT 21H
+MOV AH,1
+INT 21H
+SUB AL,'0'
+MOV A,AL
+LEA DX,P2
+MOV AH,9
+INT 21H
+MOV AH,1
+INT 21H
+SUB AL,'0'
+MOV B,AL
+
+LEA DX,M1
+MOV AH,9
+INT 21H
+XOR AX,AX
+MOV AL,A
+XOR BX,BX
+MOV BL,B
+ADD AX,BX
+CALL PRINT_U16
+
+LEA DX,M2
+MOV AH,9
+INT 21H
+MOV AL,A
+CMP AL,B
+JAE T2_SUB_POS
+MOV DL,'-'
+MOV AH,2
+INT 21H
+MOV AL,B
+SUB AL,A
+JMP T2_SUB_PRINT
+T2_SUB_POS:
+MOV AL,A
+SUB AL,B
+T2_SUB_PRINT:
+XOR AH,AH
+CALL PRINT_U16
+
+LEA DX,M3
+MOV AH,9
+INT 21H
+MOV AL,A
+MOV BL,B
+MUL BL
+CALL PRINT_U16
+
+CMP B,0
+JE T2_DIV_ZERO
+LEA DX,M4
+MOV AH,9
+INT 21H
+MOV AL,A
+XOR AH,AH
+MOV BL,B
+DIV BL              ; AL=quotient, AH=remainder
+MOV Q,AL
+MOV REMV,AH         ; preserve remainder before DOS calls
+XOR AX,AX
+MOV AL,Q
+CALL PRINT_U16
+LEA DX,M5
+MOV AH,9
+INT 21H
+XOR AX,AX
+MOV AL,REMV
+CALL PRINT_U16
+JMP T2_FINISH
+T2_DIV_ZERO:
+LEA DX,ERR
+MOV AH,9
+INT 21H
+T2_FINISH:
+\end{lstlisting}
+\subsection*{Task 03(a) -- Read a character and display it at the next same-line position}
+\begin{lstlisting}[style=asm]
+MOV AH, 1
+INT 21H
+MOV BL, AL
+MOV DL, BL
+MOV AH, 2
+INT 21H
+\end{lstlisting}
+\subsection*{Task 03(b) -- Read uppercase and display lowercase on the same line}
+\begin{lstlisting}[style=asm]
+MOV AH, 1
+INT 21H
+ADD AL, 20H         ; assumes input is A..Z
+MOV DL, AL
+MOV AH, 2
+INT 21H
+\end{lstlisting}
+\subsection*{Task 04 -- Uppercase to lowercase on the next line}
+\begin{lstlisting}[style=asm]
+MOV AH, 1
+INT 21H
+ADD AL, 20H
+MOV BL, AL
+MOV DL, 0DH
+MOV AH, 2
+INT 21H
+MOV DL, 0AH
+INT 21H
+MOV DL, BL
+INT 21H
+\end{lstlisting}
+
+\subsection*{Task 05 -- Add two digits and show the message}
+Assumption from the sheet: both inputs are single decimal digits and their sum is below 10.
+\begin{lstlisting}[style=asm]
+.DATA
+MSG1 DB 0DH,0AH,'THE SUM OF $'
+MSG2 DB ' AND $'
+MSG3 DB ' IS $'
+.CODE
+MOV DL,'?'
+MOV AH,2
+INT 21H
+MOV AH,1
+INT 21H
+MOV BL,AL          ; original ASCII digit
+SUB AL,'0'
+MOV CL,AL
+MOV AH,1
+INT 21H
+MOV BH,AL          ; second ASCII digit
+SUB AL,'0'
+ADD CL,AL          ; numeric sum
+LEA DX,MSG1
+MOV AH,9
+INT 21H
+MOV DL,BL
+MOV AH,2
+INT 21H
+LEA DX,MSG2
+MOV AH,9
+INT 21H
+MOV DL,BH
+MOV AH,2
+INT 21H
+LEA DX,MSG3
+MOV AH,9
+INT 21H
+MOV DL,CL
+ADD DL,'0'
+MOV AH,2
+INT 21H
+\end{lstlisting}
+
+\subsection*{Task 06 -- Display three initials vertically}
+\begin{lstlisting}[style=asm]
+.DATA
+MSG DB 'ENTER THREE INITIALS: $'
+.CODE
+LEA DX,MSG
+MOV AH,9
+INT 21H
+MOV AH,1
+INT 21H
+MOV BL,AL
+MOV AH,1
+INT 21H
+MOV BH,AL
+MOV AH,1
+INT 21H
+MOV CL,AL
+; first initial
+CALL NEWLINE
+MOV DL,BL
+MOV AH,2
+INT 21H
+; second initial
+CALL NEWLINE
+MOV DL,BH
+INT 21H
+; third initial
+CALL NEWLINE
+MOV DL,CL
+INT 21H
+\end{lstlisting}
+
+\subsection*{Task 07 -- Convert hex digit A--F to decimal}
+\begin{lstlisting}[style=asm]
+.DATA
+P DB 'ENTER A HEX DIGIT (A-F): $'
+O DB 0DH,0AH,'IN DECIMAL IT IS $'
+.CODE
+LEA DX,P
+MOV AH,9
+INT 21H
+MOV AH,1
+INT 21H
+SUB AL,37H          ; 'A'=41H -> 10, ..., 'F' -> 15
+XOR AH,AH
+MOV BL,AL
+LEA DX,O
+MOV AH,9
+INT 21H
+XOR AX,AX
+MOV AL,BL
+CALL PRINT_U16
+\end{lstlisting}
+This task as written accepts A--F. The later Lab 03(B) Task 06 expands validation to accept 0--9 and A--F.
+
+\subsection*{Task 08 -- Display a solid 10 x 10 box of asterisks}
+\begin{lstlisting}[style=asm]
+.DATA
+LINE DB '**********',0DH,0AH,'$'
+.CODE
+MOV CX,10
+PRINT_ROW:
+    LEA DX,LINE
+    MOV AH,9
+    INT 21H
+    LOOP PRINT_ROW
+\end{lstlisting}
+
+\subsection*{Task 09 -- Read two multi-digit decimal numbers and add them}
+Use a helper that reads decimal digits until Enter (CR). The result is a 16-bit unsigned sum, so each input and the sum must fit 0..65535. Insert the data declarations and main body below; put \texttt{READ\_DECIMAL} and \texttt{PRINT\_U16} procedures after MAIN ENDP.
+\begin{lstlisting}[style=asm]
+.DATA
+PROMPT1 DB 'First number: $'
+PROMPT2 DB 0DH,0AH,'Second number: $'
+OUTMSG DB 0DH,0AH,'Sum = $'
+N1 DW ?
+N2 DW ?
+SUM DW ?
+.CODE
+LEA DX,PROMPT1
+MOV AH,9
+INT 21H
+CALL READ_DECIMAL
+MOV N1,AX
+LEA DX,PROMPT2
+MOV AH,9
+INT 21H
+CALL READ_DECIMAL
+MOV N2,AX
+MOV AX,N1
+ADD AX,N2
+MOV SUM,AX
+LEA DX,OUTMSG
+MOV AH,9
+INT 21H
+MOV AX,SUM
+CALL PRINT_U16
+\end{lstlisting}
+\begin{lstlisting}[style=asm]
+READ_DECIMAL PROC
+    PUSH BX
+    PUSH CX
+    PUSH DX
+    XOR BX,BX            ; accumulator
+RD_NEXT:
+    MOV AH,1
+    INT 21H
+    CMP AL,0DH
+    JE RD_DONE
+    CMP AL,'0'
+    JB RD_NEXT           ; ignore non-digit input
+    CMP AL,'9'
+    JA RD_NEXT
+    SUB AL,'0'
+    XOR AH,AH
+    MOV CX,AX            ; keep current digit
+    MOV AX,BX
+    MOV DX,10
+    MUL DX               ; accumulator * 10
+    ADD AX,CX
+    MOV BX,AX
+    JMP RD_NEXT
+RD_DONE:
+    MOV AX,BX
+    POP DX
+    POP CX
+    POP BX
+    RET
+READ_DECIMAL ENDP
+\end{lstlisting}
+
+\subsection*{Task 10 -- Flags after AL=80H, BL=80H, ADD AL,BL}
+\begin{answerBox}
+Result stored in AL: \texttt{00H}. Flags: \textbf{CF=1, PF=1, AF=0, ZF=1, SF=0, OF=1}. Explanation: 80H+80H=100H; the 8-bit carry is discarded, giving zero. Two negative signed operands (-128 and -128) produce an out-of-range mathematical result, so OF=1. The low nibbles 0+0 create no auxiliary carry.
+\end{answerBox}
+The notes' worked line lists AF=1, but that is a mistake: AF is 0 for this addition.
+
+\subsection*{Task 11 -- Both AX and BX positive: carry in but no carry out iff signed overflow}
+For positive signed 16-bit numbers, both sign bits are 0. If their sum crosses the positive maximum (7FFFH), the 16-bit result's sign bit becomes 1. This requires a carry into bit 15 but no carry out of bit 15. Since OF is the XOR of carry into and carry out of the sign bit, OF=1 exactly in this case. Conversely, if the carries differ while both inputs have sign 0, the carry pattern must be carry-in=1 and carry-out=0, so the stored result has sign bit 1 and signed overflow has occurred.
+
+\subsection*{Task 12 -- Both AX and BX negative: carry out but no carry in iff signed overflow}
+For two negative signed 16-bit numbers, both sign bits are 1. If the sum is below -32768, the stored 16-bit result becomes non-negative. The carry pattern is carry-in=0 and carry-out=1. Again, OF=carry-in XOR carry-out, so overflow occurs exactly when carry-out exists but carry-in does not. Conversely, with both input signs 1, that unequal carry pattern is the condition that makes the result sign bit 0 and indicates signed overflow.
+
+\section{Lab 03(A) -- Flow control and branching}
+Unless otherwise stated, the snippets are the MAIN body; define the named variables/messages in .DATA. Use signed comparisons for signed values and unsigned comparisons for non-negative values/ASCII codes.
+
+\subsection*{Task 01 -- Replace AX by 5 if AX is negative}
+\begin{lstlisting}[style=asm]
+MOV AX, -10          ; sample input
+CMP AX, 0
+JGE T1_DONE
+MOV AX, 5
+T1_DONE:
+\end{lstlisting}
+\subsection*{Task 02 -- Display the earlier extended ASCII character in AL/BL}
+Use unsigned ordering because character codes are byte values.
+\begin{lstlisting}[style=asm]
+MOV AL, 'B'
+MOV BL, 'A'
+CMP AL, BL
+JBE T2_AL_FIRST
+MOV DL, BL
+JMP T2_PRINT
+T2_AL_FIRST:
+MOV DL, AL
+T2_PRINT:
+MOV AH, 2
+INT 21H
+\end{lstlisting}
+\subsection*{Task 03 -- Put -1, 0, or 1 in BX according to AX}
+\begin{lstlisting}[style=asm]
+CMP AX, 0
+JL T3_NEG
+JE T3_ZERO
+MOV BX, 1
+JMP T3_END
+T3_NEG:
+MOV BX, -1
+JMP T3_END
+T3_ZERO:
+MOV BX, 0
+T3_END:
+\end{lstlisting}
+\subsection*{Task 04 -- If AL is 1 or 3 print o; if 2 or 4 print e}
+\begin{lstlisting}[style=asm]
+CMP AL,1
+JE T4_ODD
+CMP AL,3
+JE T4_ODD
+CMP AL,2
+JE T4_EVEN
+CMP AL,4
+JE T4_EVEN
+JMP T4_END
+T4_ODD:
+MOV DL,'o'
+JMP T4_PRINT
+T4_EVEN:
+MOV DL,'e'
+T4_PRINT:
+MOV AH,2
+INT 21H
+T4_END:
+\end{lstlisting}
+\subsection*{Task 05 -- Read and display only an uppercase letter}
+\begin{lstlisting}[style=asm]
+MOV AH,1
+INT 21H
+CMP AL,'A'
+JB T5_END
+CMP AL,'Z'
+JA T5_END
+MOV DL,AL
+MOV AH,2
+INT 21H
+T5_END:
+\end{lstlisting}
+\subsection*{Task 06 -- Display input only if y or Y; otherwise terminate}
+\begin{lstlisting}[style=asm]
+MOV AH,1
+INT 21H
+CMP AL,'y'
+JE T6_SHOW
+CMP AL,'Y'
+JNE T6_END
+T6_SHOW:
+MOV DL,AL
+MOV AH,2
+INT 21H
+T6_END:
+\end{lstlisting}
+\subsection*{Task 07 -- Check even or odd}
+This example checks a byte value stored in AL. Use \texttt{TEST} so the value itself is not changed.
+\begin{lstlisting}[style=asm]
+MOV AL, 23
+TEST AL, 1
+JZ T7_EVEN
+LEA DX, MSG_ODD
+JMP T7_PRINT
+T7_EVEN:
+LEA DX, MSG_EVEN
+T7_PRINT:
+MOV AH,9
+INT 21H
+\end{lstlisting}
+Data: \texttt{MSG\_ODD DB 'ODD\$'} and \texttt{MSG\_EVEN DB 'EVEN\$'}.
+
+\subsection*{Task 08 -- Vowel or consonant (case-insensitive)}
+\begin{lstlisting}[style=asm]
+MOV AH,1
+INT 21H
+OR AL,20H            ; uppercase ASCII -> lowercase
+CMP AL,'a'
+JE T8_VOWEL
+CMP AL,'e'
+JE T8_VOWEL
+CMP AL,'i'
+JE T8_VOWEL
+CMP AL,'o'
+JE T8_VOWEL
+CMP AL,'u'
+JE T8_VOWEL
+LEA DX,MSG_CONSONANT
+JMP T8_PRINT
+T8_VOWEL:
+LEA DX,MSG_VOWEL
+T8_PRINT:
+MOV AH,9
+INT 21H
+\end{lstlisting}
+Data: \texttt{MSG\_VOWEL DB 'VOWEL\$'} and \texttt{MSG\_CONSONANT DB 'CONSONANT\$'}. This assumes the input is an alphabetic character.
+
+\subsection*{Task 09 -- Check divisibility by both 5 and 11}
+\begin{lstlisting}[style=asm]
+.DATA
+NUM DW 55
+MSG_Y DB 'Divisible by both 5 and 11$'
+MSG_N DB 'Not divisible by both$'
+.CODE
+MOV AX,NUM
+XOR DX,DX
+MOV BX,5
+DIV BX
+CMP DX,0
+JNE T9_NO
+MOV AX,NUM
+XOR DX,DX
+MOV BX,11
+DIV BX
+CMP DX,0
+JNE T9_NO
+LEA DX,MSG_Y
+JMP T9_PRINT
+T9_NO:
+LEA DX,MSG_N
+T9_PRINT:
+MOV AH,9
+INT 21H
+\end{lstlisting}
+
+\subsection*{Task 10 -- Maximum and minimum of three numbers}
+The sheet's sample says input 2, 3, 4 but shows minimum 1. That sample minimum is inconsistent: the minimum of 2, 3, 4 is 2. The following correct program uses unsigned word values.
+\begin{lstlisting}[style=asm]
+.DATA
+A DW 2
+B DW 3
+C DW 4
+MAXV DW ?
+MINV DW ?
+.CODE
+MOV AX,A
+MOV MAXV,AX
+MOV MINV,AX
+MOV AX,B
+CMP AX,MAXV
+JBE T10_CHECK_B_MIN
+MOV MAXV,AX
+T10_CHECK_B_MIN:
+CMP AX,MINV
+JAE T10_CHECK_C
+MOV MINV,AX
+T10_CHECK_C:
+MOV AX,C
+CMP AX,MAXV
+JBE T10_CHECK_C_MIN
+MOV MAXV,AX
+T10_CHECK_C_MIN:
+CMP AX,MINV
+JAE T10_DONE
+MOV MINV,AX
+T10_DONE:
+\end{lstlisting}
+
+\subsection*{Task 11 -- Check whether three sides form a valid triangle}
+For positive side lengths A, B, C, all three triangle inequalities must hold: A+B>C, A+C>B, B+C>A. This code also handles a 16-bit addition carry as definitely greater than the third unsigned side.
+\begin{lstlisting}[style=asm]
+.DATA
+A DW 3
+B DW 4
+C DW 5
+YESMSG DB 'Y$'
+NOMSG DB 'N$'
+.CODE
+MOV AX,A
+ADD AX,B
+JC T11_AB_OK
+CMP AX,C
+JBE T11_NO
+T11_AB_OK:
+MOV AX,A
+ADD AX,C
+JC T11_AC_OK
+CMP AX,B
+JBE T11_NO
+T11_AC_OK:
+MOV AX,B
+ADD AX,C
+JC T11_BC_OK
+CMP AX,A
+JBE T11_NO
+T11_BC_OK:
+LEA DX,YESMSG
+JMP T11_PRINT
+T11_NO:
+LEA DX,NOMSG
+T11_PRINT:
+MOV AH,9
+INT 21H
+\end{lstlisting}
+This checks the inequalities but assumes A, B, and C are positive. If reading input, reject zero first.
+
+\subsection*{Task 12 -- Map values 0--3 to i, 4--6 to k, 7--9 to l, and 10 to m}
+The sheet says ``a digit'' but includes 10, which cannot be represented by one decimal digit. Treat AX as an integer in 0..10 (or read a two-character decimal number for 10).
+\begin{lstlisting}[style=asm]
+; AX contains numeric value 0..10
+CMP AX,3
+JBE T12_I
+CMP AX,6
+JBE T12_K
+CMP AX,9
+JBE T12_L
+CMP AX,10
+JE T12_M
+JMP T12_END
+T12_I: MOV DL,'i'
+       JMP T12_PRINT
+T12_K: MOV DL,'k'
+       JMP T12_PRINT
+T12_L: MOV DL,'l'
+       JMP T12_PRINT
+T12_M: MOV DL,'m'
+T12_PRINT:
+MOV AH,2
+INT 21H
+T12_END:
+\end{lstlisting}
+
+\subsection*{Task 13 -- Print weekday; Saturday is day 1}
+\begin{lstlisting}[style=asm]
+.DATA
+D1 DB 'Saturday$'
+D2 DB 'Sunday$'
+D3 DB 'Monday$'
+D4 DB 'Tuesday$'
+D5 DB 'Wednesday$'
+D6 DB 'Thursday$'
+D7 DB 'Friday$'
+DAY DB 3
+.CODE
+MOV AL,DAY
+CMP AL,1
+JE T13_1
+CMP AL,2
+JE T13_2
+CMP AL,3
+JE T13_3
+CMP AL,4
+JE T13_4
+CMP AL,5
+JE T13_5
+CMP AL,6
+JE T13_6
+CMP AL,7
+JE T13_7
+JMP T13_END
+T13_1: LEA DX,D1
+       JMP T13_PRINT
+T13_2: LEA DX,D2
+       JMP T13_PRINT
+T13_3: LEA DX,D3
+       JMP T13_PRINT
+T13_4: LEA DX,D4
+       JMP T13_PRINT
+T13_5: LEA DX,D5
+       JMP T13_PRINT
+T13_6: LEA DX,D6
+       JMP T13_PRINT
+T13_7: LEA DX,D7
+T13_PRINT:
+MOV AH,9
+INT 21H
+T13_END:
+\end{lstlisting}
+
+\subsection*{Task 14 -- Print number of days in a month}
+February is treated as 28 days because the task does not provide a year/leap-year input.
+\begin{lstlisting}[style=asm]
+.DATA
+MONTH DB 3
+D31 DB '31 day$'
+D30 DB '30 day$'
+D28 DB '28 day$'
+.CODE
+MOV AL,MONTH
+CMP AL,1
+JE T14_31
+CMP AL,3
+JE T14_31
+CMP AL,5
+JE T14_31
+CMP AL,7
+JE T14_31
+CMP AL,8
+JE T14_31
+CMP AL,10
+JE T14_31
+CMP AL,12
+JE T14_31
+CMP AL,4
+JE T14_30
+CMP AL,6
+JE T14_30
+CMP AL,9
+JE T14_30
+CMP AL,11
+JE T14_30
+CMP AL,2
+JE T14_28
+JMP T14_END
+T14_31: LEA DX,D31
+        JMP T14_PRINT
+T14_30: LEA DX,D30
+        JMP T14_PRINT
+T14_28: LEA DX,D28
+T14_PRINT:
+MOV AH,9
+INT 21H
+T14_END:
+\end{lstlisting}
+
+\section{Lab 03(B) -- Looping structures}
+\subsection*{Task 01 -- Implicit loop to display 80 stars}
+\begin{lstlisting}[style=asm]
+MOV CX,80
+MOV DL,'*'
+T1_LOOP:
+    MOV AH,2
+    INT 21H
+    LOOP T1_LOOP
+\end{lstlisting}
+
+\subsection*{Task 02(a) -- Sum 1 + 4 + 7 + ... + 148 into AX}
+There are 50 terms. The final value is 3725 decimal (0E8DH).
+\begin{lstlisting}[style=asm]
+MOV AX,0             ; sum
+MOV BX,1             ; current term
+MOV CX,50
+T2A_LOOP:
+    ADD AX,BX
+    ADD BX,3
+    LOOP T2A_LOOP
+; AX = 3725 = 0E8DH
+\end{lstlisting}
+\subsection*{Task 02(b) -- Sum 100 + 95 + ... + 5 into variable SUM}
+There are 20 terms. The final value is 1050 decimal (041AH).
+\begin{lstlisting}[style=asm]
+.DATA
+SUM DW 0
+.CODE
+MOV AX,0
+MOV BX,100
+MOV CX,20
+T2B_LOOP:
+    ADD AX,BX
+    SUB BX,5
+    LOOP T2B_LOOP
+MOV SUM,AX
+\end{lstlisting}
+
+\subsection*{Task 03 -- Read five password characters and overprint with five Xs}
+The sheet specifies five characters and five X characters. AH=01H echoes typed characters; after five inputs, output CR and five Xs.
+\begin{lstlisting}[style=asm]
+MOV CX,5
+T3_READ:
+    MOV AH,1
+    INT 21H
+    LOOP T3_READ
+MOV DL,0DH
+MOV AH,2
+INT 21H
+MOV CX,5
+MOV DL,'X'
+T3_MASK:
+    MOV AH,2
+    INT 21H
+    LOOP T3_MASK
+\end{lstlisting}
+
+\subsection*{Task 04 -- Multiply M and N by repeated addition}
+Assume M and N are non-negative and N is a positive count. If N=0, the product is 0 and the loop should be skipped.
+\begin{lstlisting}[style=asm]
+.DATA
+M DW 7
+N DW 4
+PRODUCT DW 0
+.CODE
+MOV AX,0
+MOV CX,N
+CMP CX,0
+JE T4_DONE
+T4_LOOP:
+    ADD AX,M
+    LOOP T4_LOOP
+T4_DONE:
+MOV PRODUCT,AX
+\end{lstlisting}
+
+\subsection*{Task 05 -- Display extended ASCII codes 80H through FFH, 10 per line}
+This displays each code once, with a blank between characters and CR/LF after every ten. Display appearance for 80H--FFH depends on the active DOS code page/EMU8086 character renderer.
+\begin{lstlisting}[style=asm]
+MOV SI,80H
+MOV BL,0             ; number printed on current line
+MOV CX,128
+T5_LOOP:
+    MOV DX,SI         ; DL = current character code
+    MOV AH,2
+    INT 21H
+    MOV DL,' '
+    MOV AH,2
+    INT 21H
+    INC BL
+    CMP BL,10
+    JNE T5_NEXT
+    MOV DL,0DH
+    MOV AH,2
+    INT 21H
+    MOV DL,0AH
+    INT 21H
+    MOV BL,0
+T5_NEXT:
+    INC SI
+    LOOP T5_LOOP
+\end{lstlisting}
+
+\subsection*{Task 06 -- Hex digit converter with validation and repeat prompt}
+\begin{lstlisting}[style=asm]
+.DATA
+P DB 'ENTER A HEX DIGIT (0-9,A-F): $'
+O DB 0DH,0AH,'IN DECIMAL IT IS $'
+AGAIN DB 0DH,0AH,'DO YOU WANT TO DO IT AGAIN? $'
+BAD DB 0DH,0AH,'ILLEGAL CHARACTER. TRY AGAIN.$'
+.CODE
+T6_INPUT:
+    LEA DX,P
+    MOV AH,9
+    INT 21H
+    MOV AH,1
+    INT 21H
+    CMP AL,'0'
+    JB T6_INVALID
+    CMP AL,'9'
+    JBE T6_NUMERIC
+    CMP AL,'A'
+    JB T6_INVALID
+    CMP AL,'F'
+    JA T6_INVALID
+    SUB AL,37H          ; A..F -> 10..15
+    JMP T6_SHOW
+T6_NUMERIC:
+    SUB AL,'0'
+T6_SHOW:
+    XOR AH,AH
+    MOV BX,AX           ; preserve numeric result
+    LEA DX,O
+    MOV AH,9
+    INT 21H
+    MOV AX,BX
+    CALL PRINT_U16
+    LEA DX,AGAIN
+    MOV AH,9
+    INT 21H
+    MOV AH,1
+    INT 21H
+    CMP AL,'y'
+    JE T6_INPUT
+    CMP AL,'Y'
+    JE T6_INPUT
+    JMP T6_END
+T6_INVALID:
+    LEA DX,BAD
+    MOV AH,9
+    INT 21H
+    JMP T6_INPUT
+T6_END:
+\end{lstlisting}
+
+\subsection*{Task 07 -- Longest consecutive alphabetically increasing capital-letter run}
+Example: \texttt{FGHADEFGHC} produces \texttt{DEFGH}. The program reads until CR and keeps the first longest run when there is a tie.
+\begin{lstlisting}[style=asm]
+.DATA
+PREV DB ?
+CURR DB ?
+CURSTART DB ?
+BESTSTART DB ?
+CURLEN DB 0
+BESTLEN DB 0
+HAVE DB 0
+MSG DB 0DH,0AH,'THE LONGEST CONSECUTIVELY INCREASING STRING IS: $'
+.CODE
+T7_READ:
+    MOV AH,1
+    INT 21H
+    CMP AL,0DH
+    JE T7_DONE
+    MOV CURR,AL
+    CMP HAVE,0
+    JNE T7_COMPARE
+    MOV HAVE,1
+    MOV AL,CURR
+    MOV PREV,AL
+    MOV CURSTART,AL
+    MOV CURLEN,1
+    MOV BESTSTART,AL
+    MOV BESTLEN,1
+    JMP T7_READ
+T7_COMPARE:
+    MOV BL,PREV
+    INC BL
+    MOV AL,CURR
+    CMP AL,BL
+    JE T7_CONTINUE
+    MOV AL,CURR
+    MOV CURSTART,AL
+    MOV CURLEN,1
+    JMP T7_UPDATE
+T7_CONTINUE:
+    INC CURLEN
+T7_UPDATE:
+    MOV AL,CURLEN
+    CMP AL,BESTLEN
+    JBE T7_SAVE_PREV
+    MOV BESTLEN,AL
+    MOV AL,CURSTART
+    MOV BESTSTART,AL
+T7_SAVE_PREV:
+    MOV AL,CURR
+    MOV PREV,AL
+    JMP T7_READ
+T7_DONE:
+    LEA DX,MSG
+    MOV AH,9
+    INT 21H
+    MOV DL,BESTSTART
+    MOV CL,BESTLEN
+    CMP CL,0
+    JE T7_END
+T7_PRINT:
+    MOV AH,2
+    INT 21H
+    INC DL
+    DEC CL
+    JNZ T7_PRINT
+T7_END:
+\end{lstlisting}
+
+\subsection*{Task 08 -- Sum 1..100 divisible by the last non-zero ID digit into M, others into N}
+Set KEY to the last non-zero digit of the student's ID (1--9). M is the divisible sum; N is the non-divisible sum.
+\begin{lstlisting}[style=asm]
+.DATA
+KEY DB 3
+M DW 0
+N DW 0
+.CODE
+MOV SI,1
+MOV M,0
+MOV N,0
+T8_LOOP:
+    MOV AX,SI
+    XOR AH,AH          ; SI is 1..100; AX contains the value
+    DIV KEY            ; byte divisor; remainder in AH
+    CMP AH,0
+    JNE T8_OTHER
+    MOV AX,M
+    ADD AX,SI
+    MOV M,AX
+    JMP T8_NEXT
+T8_OTHER:
+    MOV AX,N
+    ADD AX,SI
+    MOV N,AX
+T8_NEXT:
+    INC SI
+    CMP SI,101
+    JB T8_LOOP
+\end{lstlisting}
+
+\subsection*{Task 09 -- Nested-loop number pattern}
+For input row count 1--9, print row 1 as 1, row 2 as 12, ..., row N as 123...N. This version reads a single input digit.
+\begin{lstlisting}[style=asm]
+MOV AH,1
+INT 21H
+SUB AL,'0'
+MOV BL,AL            ; number of rows
+MOV BH,1              ; current row
+T9_OUTER:
+    MOV CL,1          ; current column
+T9_INNER:
+    MOV DL,CL
+    ADD DL,'0'
+    MOV AH,2
+    INT 21H
+    INC CL
+    CMP CL,BH
+    JBE T9_INNER
+    MOV DL,0DH
+    MOV AH,2
+    INT 21H
+    MOV DL,0AH
+    INT 21H
+    INC BH
+    CMP BH,BL
+    JBE T9_OUTER
+\end{lstlisting}
+
+\subsection*{Task 10 -- Read four year digits using a loop and test leap year}
+The lab sheet's stated rule has a logical typo: ``divisible by 400 but not by 100'' is impossible, because every multiple of 400 is also a multiple of 100. The correct Gregorian rule is: a year is leap if it is divisible by 400, OR if it is divisible by 4 and not divisible by 100. This complete program body implements that rule.
+\begin{lstlisting}[style=asm]
+.DATA
+YEAR DW 0
+DIGIT DB ?
+MSG_LEAP DB 0DH,0AH,'Leap year$'
+MSG_NOT DB 0DH,0AH,'Not leap year$'
+.CODE
+MOV CX,4
+MOV YEAR,0
+T10_READ:
+    MOV AH,1
+    INT 21H
+    SUB AL,'0'
+    MOV DIGIT,AL
+    MOV AX,YEAR
+    MOV BX,10
+    MUL BX              ; AX = current year * 10
+    XOR BX,BX
+    MOV BL,DIGIT
+    ADD AX,BX
+    MOV YEAR,AX
+    LOOP T10_READ
+
+; if divisible by 400 -> leap
+MOV AX,YEAR
+XOR DX,DX
+MOV BX,400
+DIV BX
+CMP DX,0
+JE T10_LEAP
+; if not divisible by 4 -> not leap
+MOV AX,YEAR
+XOR DX,DX
+MOV BX,4
+DIV BX
+CMP DX,0
+JNE T10_NOT
+; divisible by 4: if divisible by 100 -> not leap
+MOV AX,YEAR
+XOR DX,DX
+MOV BX,100
+DIV BX
+CMP DX,0
+JE T10_NOT
+T10_LEAP:
+LEA DX,MSG_LEAP
+JMP T10_PRINT
+T10_NOT:
+LEA DX,MSG_NOT
+T10_PRINT:
+MOV AH,9
+INT 21H
+\end{lstlisting}
+\section{Sample Midterm Question Paper 1 -- Complete worked answers}
+\subsection*{Question 1 -- Evaluate ((P+Q) // (R mod S)) * T}
+Use variables only. P=14, Q=45, R=9, S=second non-zero student-ID digit, T=last non-zero student-ID digit. Store result in RESULT.
+\begin{lstlisting}[style=asm]
+.DATA
+P DW 14
+Q DW 45
+R DW 9
+S DW 2          ; replace with the required ID digit
+T DW 3          ; replace with the required ID digit
+RESULT DW ?
+ERR DB 'R mod S is zero; expression undefined.$'
+.CODE
+; remainder = R mod S
+MOV AX,R
+XOR DX,DX
+MOV BX,S
+CMP BX,0
+JE SQ1_ERROR
+DIV BX
+MOV BX,DX          ; BX = R mod S
+CMP BX,0
+JE SQ1_ERROR
+; quotient = (P+Q) / (R mod S)
+MOV AX,P
+ADD AX,Q
+XOR DX,DX
+DIV BX
+; multiply quotient by T
+MUL T
+MOV RESULT,AX      ; assuming product fits in 16 bits
+JMP SQ1_DONE
+SQ1_ERROR:
+LEA DX,ERR
+MOV AH,9
+INT 21H
+SQ1_DONE:
+\end{lstlisting}
+If S divides 9 exactly, then R mod S = 0 and the expression divides by zero. In that case there is no defined numeric answer. If the product exceeds 65535, store the full 32-bit result as DX:AX / two words.
+
+\subsection*{Question 2 -- Read and evaluate five signed one-digit expressions}
+Input format per line: [sign][digit][operator][sign][digit]. Operators: +, -, *, /. The full program below repeats five times; signed division truncates toward zero. Division by zero prints an error and continues. Add the listed data fields and the procedures after MAIN.
+\begin{lstlisting}[style=asm]
+.DATA
+COUNT DB 5
+SIGN1 DB ?
+SIGN2 DB ?
+OPR DB ?
+DIGIT DB ?
+OPA DW ?
+OPB DW ?
+RES DW ?
+ERRDIV DB '  DIVISION BY ZERO$'
+.CODE
+MOV CL,5
+SQ2_NEXT:
+    ; first sign
+    MOV AH,1
+    INT 21H
+    MOV SIGN1,AL
+    ; first digit
+    MOV AH,1
+    INT 21H
+    SUB AL,'0'
+    XOR AH,AH
+    MOV BX,AX
+    CMP SIGN1,'-'
+    JNE SQ2_SAVE_A
+    NEG BX
+SQ2_SAVE_A:
+    MOV OPA,BX
+    ; operator
+    MOV AH,1
+    INT 21H
+    MOV OPR,AL
+    ; second sign
+    MOV AH,1
+    INT 21H
+    MOV SIGN2,AL
+    ; second digit
+    MOV AH,1
+    INT 21H
+    SUB AL,'0'
+    XOR AH,AH
+    MOV BX,AX
+    CMP SIGN2,'-'
+    JNE SQ2_SAVE_B
+    NEG BX
+SQ2_SAVE_B:
+    MOV OPB,BX
+    ; evaluate
+    MOV AX,OPA
+    CMP OPR,'+'
+    JE SQ2_ADD
+    CMP OPR,'-'
+    JE SQ2_SUB
+    CMP OPR,'*'
+    JE SQ2_MUL
+    CMP OPR,'/'
+    JE SQ2_DIV
+    JMP SQ2_DISPLAY
+SQ2_ADD:
+    ADD AX,OPB
+    JMP SQ2_STORE
+SQ2_SUB:
+    SUB AX,OPB
+    JMP SQ2_STORE
+SQ2_MUL:
+    IMUL OPB
+    JMP SQ2_STORE
+SQ2_DIV:
+    CMP OPB,0
+    JE SQ2_DIVZERO
+    CWD
+    IDIV OPB
+    JMP SQ2_STORE
+SQ2_DIVZERO:
+    LEA DX,ERRDIV
+    MOV AH,9
+    INT 21H
+    JMP SQ2_LINE_END
+SQ2_STORE:
+    MOV RES,AX
+SQ2_DISPLAY:
+    MOV AX,RES
+    CALL PRINT_S16
+SQ2_LINE_END:
+    CALL NEWLINE
+    DEC CL
+    JZ SQ2_FINISH
+    ; consume the Enter key after the 5-character expression without echo
+    MOV AH,8
+    INT 21H
+    JMP SQ2_NEXT
+SQ2_FINISH:
+\end{lstlisting}
+This assumes the user presses Enter after each five-character expression. If the assessment uses a continuous 25-character stream, remove the CR-consumption call. Include \texttt{PRINT\_S16}, \texttt{PRINT\_U16}, and \texttt{NEWLINE} from Section 1. The sample \texttt{-5++4} evaluates to -1.
+
+\subsection*{Question 3 -- Three command characters control the next three characters}
+\begin{lstlisting}[style=asm]
+.DATA
+C1 DB ?
+C2 DB ?
+C3 DB ?
+X1 DB ?
+X2 DB ?
+X3 DB ?
+.CODE
+MOV AH,1
+INT 21H
+MOV C1,AL
+MOV AH,1
+INT 21H
+MOV C2,AL
+MOV AH,1
+INT 21H
+MOV C3,AL
+MOV AH,1
+INT 21H
+MOV X1,AL
+MOV AH,1
+INT 21H
+MOV X2,AL
+MOV AH,1
+INT 21H
+MOV X3,AL
+
+; command 1 controls character 1
+MOV AL,X1
+CMP C1,'U'
+JNE SQ3_C1_LOWER
+CMP AL,'a'
+JB SQ3_SAVE1
+CMP AL,'z'
+JA SQ3_SAVE1
+SUB AL,20H
+JMP SQ3_SAVE1
+SQ3_C1_LOWER:
+CMP C1,'L'
+JNE SQ3_SAVE1
+CMP AL,'A'
+JB SQ3_SAVE1
+CMP AL,'Z'
+JA SQ3_SAVE1
+ADD AL,20H
+SQ3_SAVE1:
+MOV X1,AL
+
+; command 2 controls character 2
+MOV AL,X2
+CMP C2,'U'
+JNE SQ3_C2_LOWER
+CMP AL,'a'
+JB SQ3_SAVE2
+CMP AL,'z'
+JA SQ3_SAVE2
+SUB AL,20H
+JMP SQ3_SAVE2
+SQ3_C2_LOWER:
+CMP C2,'L'
+JNE SQ3_SAVE2
+CMP AL,'A'
+JB SQ3_SAVE2
+CMP AL,'Z'
+JA SQ3_SAVE2
+ADD AL,20H
+SQ3_SAVE2:
+MOV X2,AL
+
+; command 3 controls character 3
+MOV AL,X3
+CMP C3,'U'
+JNE SQ3_C3_LOWER
+CMP AL,'a'
+JB SQ3_SAVE3
+CMP AL,'z'
+JA SQ3_SAVE3
+SUB AL,20H
+JMP SQ3_SAVE3
+SQ3_C3_LOWER:
+CMP C3,'L'
+JNE SQ3_SAVE3
+CMP AL,'A'
+JB SQ3_SAVE3
+CMP AL,'Z'
+JA SQ3_SAVE3
+ADD AL,20H
+SQ3_SAVE3:
+MOV X3,AL
+
+MOV DL,X1
+MOV AH,2
+INT 21H
+MOV DL,X2
+INT 21H
+MOV DL,X3
+INT 21H
+\end{lstlisting}
+For input \texttt{UULaBc}, output is \texttt{ABc}. A command other than U or L leaves its character unchanged.
+
+\subsection*{Question 4 -- Sum 1..100 into M (not divisible by key) and N (divisible)}
+\begin{lstlisting}[style=asm]
+.DATA
+PROMPT DB 'Enter the selection key (1-9): $'
+M DW 0                  ; not divisible
+N DW 0                  ; divisible
+KEY DB ?
+LABM DB 0DH,0AH,'Starting XI score: $'
+LABN DB 0DH,0AH,'Substitute score: $'
+.CODE
+LEA DX,PROMPT
+MOV AH,9
+INT 21H
+MOV AH,1
+INT 21H
+SUB AL,'0'
+MOV KEY,AL
+MOV M,0
+MOV N,0
+MOV SI,1
+SQ4_LOOP:
+    MOV AX,SI
+    DIV KEY             ; SI is 1..100, AL quotient, AH remainder
+    CMP AH,0
+    JNE SQ4_NOT_DIV
+    MOV AX,N
+    ADD AX,SI
+    MOV N,AX
+    JMP SQ4_NEXT
+SQ4_NOT_DIV:
+    MOV AX,M
+    ADD AX,SI
+    MOV M,AX
+SQ4_NEXT:
+    INC SI
+    CMP SI,101
+    JB SQ4_LOOP
+LEA DX,LABM
+MOV AH,9
+INT 21H
+MOV AX,M
+CALL PRINT_U16
+LEA DX,LABN
+MOV AH,9
+INT 21H
+MOV AX,N
+CALL PRINT_U16
+\end{lstlisting}
+Expected examples: key 3 gives M=3367 and N=1683; key 9 gives M=4456 and N=594. Input key must be 1--9.
+
+\section{Sample Midterm Question Paper 2 -- Complete worked answers}
+\subsection*{Question 1 -- Electricity bill expression}
+Equation: $((UNITS^2)\div RATE)+(FIXED\_CHARGE\times MONTHS)$. Store the result in RESULT. All operands are variables.
+\begin{lstlisting}[style=asm]
+.DATA
+UNITS DW 12
+RATE DW 5
+FIXED_CHARGE DW 4    ; replace with 3rd non-zero ID digit
+MONTHS DW 3          ; replace with last non-zero ID digit
+RESULT DW ?
+.CODE
+MOV AX,UNITS
+MUL UNITS            ; DX:AX = UNITS squared
+MOV BX,RATE
+DIV BX               ; AX = floor(UNITS^2 / RATE)
+MOV CX,AX             ; save first term
+MOV AX,FIXED_CHARGE
+MUL MONTHS             ; DX:AX = FIXED_CHARGE * MONTHS
+ADD AX,CX
+MOV RESULT,AX         ; assuming final value fits in 16 bits
+\end{lstlisting}
+With the sample values FIXED\_CHARGE=4 and MONTHS=3: $144/5=28$ (integer division), $4\times3=12$, total RESULT=40.
+
+\subsection*{Question 2 -- Convert 24-hour AX to a two-digit 12-hour display}
+The input hour is initially in AX (0--23). Output order is hour first, followed by AM/PM, with a leading zero for 1--9.
+\begin{lstlisting}[style=asm]
+.DATA
+AMMSG DB ' AM$'
+PMMSG DB ' PM$'
+HOUR12 DB ?
+ISPM DB ?
+.CODE
+; AX contains input hour 0..23
+CMP AX,0
+JNE S2Q2_NOT_ZERO
+MOV HOUR12,12
+MOV ISPM,0
+JMP S2Q2_PRINT_HOUR
+S2Q2_NOT_ZERO:
+CMP AX,12
+JE S2Q2_NOON
+JB S2Q2_AM
+SUB AX,12
+MOV HOUR12,AL
+MOV ISPM,1
+JMP S2Q2_PRINT_HOUR
+S2Q2_NOON:
+MOV HOUR12,12
+MOV ISPM,1
+JMP S2Q2_PRINT_HOUR
+S2Q2_AM:
+MOV HOUR12,AL
+MOV ISPM,0
+S2Q2_PRINT_HOUR:
+MOV AL,HOUR12
+XOR AH,AH
+MOV BL,10
+DIV BL               ; AL=tens, AH=ones
+MOV BH,AH
+MOV DL,AL
+ADD DL,'0'
+MOV AH,2
+INT 21H
+MOV DL,BH
+ADD DL,'0'
+MOV AH,2
+INT 21H
+CMP ISPM,0
+JNE S2Q2_PM
+LEA DX,AMMSG
+JMP S2Q2_SUFFIX
+S2Q2_PM:
+LEA DX,PMMSG
+S2Q2_SUFFIX:
+MOV AH,9
+INT 21H
+\end{lstlisting}
+Expected displays: AX=0 -> 12 AM; AX=9 -> 09 AM; AX=12 -> 12 PM; AX=23 -> 11 PM.
+
+\subsection*{Question 3 -- Find second smallest of four register values and leave it in DX}
+Use an ascending sorting network with five compare-and-swap pairs. This preserves all four values until the final assignment. The jumps are unsigned because the input range is 1..65535.
+\begin{lstlisting}[style=asm]
+; Initial values are already in AX, BX, CX, DX.
+; Compare-swap AX,BX
+CMP AX,BX
+JBE S2Q3_AB
+XCHG AX,BX
+S2Q3_AB:
+; Compare-swap CX,DX
+CMP CX,DX
+JBE S2Q3_CD
+XCHG CX,DX
+S2Q3_CD:
+; Compare-swap AX,CX
+CMP AX,CX
+JBE S2Q3_AC
+XCHG AX,CX
+S2Q3_AC:
+; Compare-swap BX,DX
+CMP BX,DX
+JBE S2Q3_BD
+XCHG BX,DX
+S2Q3_BD:
+; Compare-swap BX,CX
+CMP BX,CX
+JBE S2Q3_BC
+XCHG BX,CX
+S2Q3_BC:
+; Sorted: AX <= BX <= CX <= DX
+MOV DX,BX             ; second smallest
+\end{lstlisting}
+Test 1,23,456,7890 -> DX=23. Test 12345,6789,10,6789 -> DX=6789. Duplicate values are handled correctly.
+
+\subsection*{Question 4 -- Sum squares above and below/equal threshold}
+Threshold key is read as one digit. M is sum of squares for numbers greater than threshold; N is sum of squares for numbers less than or equal to threshold.
+\begin{lstlisting}[style=asm]
+.DATA
+PROMPT DB 'Enter the threshold key: $'
+ABOVE_MSG DB 0DH,0AH,'Above threshold sum: $'
+BELOW_MSG DB 0DH,0AH,'Below threshold sum: $'
+KEY DB ?
+I DW 1
+M DW 0
+N DW 0
+.CODE
+LEA DX,PROMPT
+MOV AH,9
+INT 21H
+MOV AH,1
+INT 21H
+SUB AL,'0'
+MOV KEY,AL
+MOV I,1
+MOV M,0
+MOV N,0
+S2Q4_LOOP:
+    MOV AX,I
+    MUL I                 ; DX:AX = I*I; here I<=50, so fits in AX
+    MOV BX,I
+    XOR BH,BH             ; BX = I
+    CMP BL,KEY
+    JBE S2Q4_BELOW
+    ADD M,AX
+    JMP S2Q4_NEXT
+S2Q4_BELOW:
+    ADD N,AX
+S2Q4_NEXT:
+    INC I
+    CMP I,51
+    JB S2Q4_LOOP
+LEA DX,ABOVE_MSG
+MOV AH,9
+INT 21H
+MOV AX,M
+CALL PRINT_U16
+LEA DX,BELOW_MSG
+MOV AH,9
+INT 21H
+MOV AX,N
+CALL PRINT_U16
+\end{lstlisting}
+For threshold 5, M=42870 and N=55. The total sum of squares $1^2$ through $50^2$ is 42925. The sample sheet prints 41845 for M, but this is an arithmetic error: 42925-55=42870.
+
+\section{Important corrections and assumptions in the supplied materials}
+\begin{enumerate}
+\item \textbf{CR/LF labels:} correct values are CR=0DH (13 decimal) and LF=0AH (10 decimal). Some extracted Lab 02 text transposes their decimal labels.
+\item \textbf{AF for 80H+80H:} AF=0, not 1, because the low nibble is 0+0. Other flags: CF=1, PF=1, ZF=1, SF=0, OF=1.
+\item \textbf{Lab 03(B) leap year wording:} ``divisible by 400 but not by 100'' cannot occur. Use the Gregorian rule: divisible by 400 OR divisible by 4 and not by 100.
+\item \textbf{Lab 03(A) Task 10 sample:} input 2,3,4 has minimum 2, not the printed 1.
+\item \textbf{Lab 03(A) Task 12:} a single decimal digit cannot equal 10. Treat input as an integer 0..10 or use two characters for 10.
+\item \textbf{Sample Midterm 2 Question 4:} for threshold 5, the correct sum of squares above the threshold is 42870; the paper prints 41845. The below/equal sum 55 is correct.
+\item \textbf{Sample Midterm 1 Question 1:} if S divides R exactly, R mod S is zero and the expression is undefined due to division by zero.
+\end{enumerate}
+
+\section{Exam practice checklist}
+\begin{itemize}
+\item[\(\square\)] I can write the supplied template and initialize DS without looking.
+\item[\(\square\)] I know the registers used implicitly by MUL and DIV.
+\item[\(\square\)] I can convert a keyboard digit from ASCII to numeric and back.
+\item[\(\square\)] I know INT 21H functions 01H, 02H, 09H, and 4CH.
+\item[\(\square\)] I can calculate CF, PF, AF, ZF, SF, and OF for a short operation.
+\item[\(\square\)] I can choose signed or unsigned jumps correctly.
+\item[\(\square\)] I can write IF, IF-ELSE, CASE, explicit, LOOP/CX, repeat-until, and nested-loop structures.
+\item[\(\square\)] I can solve a sum/counting task and display a multi-digit decimal result.
+\item[\(\square\)] I have traced each solution with Single Step at least once.
+\end{itemize}
+\begin{center}\Large\bfseries Do not memorize only the code. Understand what each register contains at every label.\end{center}
+\end{document}

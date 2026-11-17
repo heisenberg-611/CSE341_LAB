@@ -1,0 +1,576 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[margin=0.78in,headheight=15pt]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{enumitem}
+\usepackage{booktabs,tabularx,longtable,array}
+\usepackage{multicol}
+\usepackage{fancyhdr}
+\usepackage{hyperref}
+\usepackage{microtype}
+\usepackage{amssymb}
+\usepackage[most]{tcolorbox}
+\hypersetup{colorlinks=true,linkcolor=blue!55!black,urlcolor=blue!55!black}
+\definecolor{navy}{HTML}{16324F}
+\definecolor{pale}{HTML}{EEF4F8}
+\definecolor{codebg}{HTML}{F5F7FA}
+\definecolor{greenish}{HTML}{EAF6EF}
+\pagestyle{fancy}\fancyhf{}\lhead{CSE341 -- 8086 Lab Mid}\rhead{Preparation Workbook}\cfoot{\thepage}
+\setlist{nosep,leftmargin=*}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{0pt}
+\lstdefinestyle{asm}{language={},basicstyle=\ttfamily\small,backgroundcolor=\color{codebg},frame=single,rulecolor=\color{black!15},breaklines=true,columns=fullflexible,keepspaces=true,showstringspaces=false,tabsize=4,postbreak=\mbox{\textcolor{red}{\small$\hookrightarrow$}\space}}
+\lstdefinestyle{tinyasm}{style=asm,basicstyle=\ttfamily\footnotesize}
+\newcommand{\hex}[1]{\texttt{#1H}}
+\newcommand{\reg}[1]{\texttt{#1}}
+\newcommand{\topic}[1]{\begin{tcolorbox}[colback=pale,colframe=navy!60,title=\textbf{#1},fonttitle=\bfseries,boxrule=.5pt,arc=2mm]\end{tcolorbox}}
+\newtcolorbox{importantbox}{colback=yellow!10,colframe=orange!60!black,boxrule=.6pt,arc=2mm}
+\newtcolorbox{sourcebox}{colback=greenish,colframe=green!45!black,boxrule=.6pt,arc=2mm}
+\title{\Huge\bfseries 8086 Assembly Language\\[3pt]\Large Complete Lab Midterm Preparation Workbook\\[5pt]\normalsize Lab 01 through Lab 03(B): Looping Structures}
+\author{CSE341 -- Microprocessors}
+\date{Prepared from the supplied BRAC University lab sheets, assembly template, and 8086 notes}
+\begin{document}
+\maketitle
+\begin{center}\large\textbf{Theory $\rightarrow$ instruction patterns $\rightarrow$ tracing $\rightarrow$ practical problem solving}\end{center}
+\begin{tcolorbox}[colback=navy!5,colframe=navy,title=Scope and how to use this workbook]
+This workbook covers the material up to \textbf{Lab 03(B) -- Looping Structures}: Lab 01 fundamentals/basic arithmetic, Lab 02 input/output and flags, Lab 03(A) branching, and Lab 03(B) loops. It also introduces the addressing-mode vocabulary and register/operand rules needed to read the supplied programs. The companion file \texttt{8086\_midterm\_solutions\_template.tex} contains worked solutions for the lab-sheet exercises and both sample midterm papers.
+
+Study in this order: (1) learn the register and operand rules, (2) memorize the DOS I/O services, (3) understand flags and the signed/unsigned jump distinction, (4) trace branching, (5) write explicit and implicit loops, and (6) practise the full exercises without looking at the solutions.
+\end{tcolorbox}
+\tableofcontents
+\newpage
+
+\section{The 8086 mental model}
+\subsection{What is a microprocessor?}
+A microprocessor is the CPU implemented on a chip. It fetches instructions, decodes them, and executes arithmetic, logic, data-transfer, and control operations. A microcontroller normally integrates a CPU with memory and peripheral interfaces on the same chip for embedded control. The Intel 8086 is a 16-bit microprocessor.
+
+\subsection{The 8086 facts to remember}
+\begin{itemize}
+\item The general-purpose registers are 16 bits wide.
+\item The external address bus is 20 bits, so the processor can address $2^{20}=1,048,576$ byte locations, i.e. 1 MiB.
+\item The data bus is 16 bits wide.
+\item Each memory address identifies one byte. A word is 16 bits (two consecutive bytes).
+\item The 8086 uses segmented memory. A physical address is formed from a segment and an offset: \[
+\text{physical address} = 16\times\text{segment} + \text{offset}.
+\]
+\end{itemize}
+
+\subsection{Registers}
+Registers are tiny, very fast storage locations inside the CPU. They are not the same as RAM.
+\begin{longtable}{p{0.2\linewidth}p{0.28\linewidth}p{0.45\linewidth}}
+\toprule \textbf{Category} & \textbf{Registers} & \textbf{Main role}\\
+\midrule
+Data/general & AX, BX, CX, DX & Hold operands and results. AX is the accumulator; BX often holds a base/address; CX is the count register used by \texttt{LOOP}; DX is used in extended multiply/divide and DOS character output through DL.\\
+Byte halves & AH/AL, BH/BL, CH/CL, DH/DL & The high and low 8-bit halves of their corresponding 16-bit registers. For example, AX = AH:AL. Changing AL changes the low half of AX.\\
+Segment & CS, DS, SS, ES & Code, data, stack, and extra segment registers. In the supplied small-model program template, initialize DS before accessing data variables.\\
+Index & SI, DI & Source and destination index registers; commonly used for arrays/strings.\\
+Pointers & SP, BP & Stack pointer and base pointer. SP is associated with SS; BP can address stack-based data.\\
+Instruction & IP & Offset of the next instruction in the code segment.\\
+Flags & FLAGS & Status and control bits that describe results or control CPU behavior.\\
+\bottomrule
+\end{longtable}
+\begin{importantbox}
+\textbf{Do not confuse a word register with its byte halves.} \texttt{MOV AX,1234H} gives AH=12H and AL=34H. \texttt{MOV AL,56H} changes only AL, so AX becomes 1256H.
+\end{importantbox}
+
+\subsection{Number formats and character storage}
+\begin{tabularx}{\linewidth}{lX}
+\toprule \textbf{Format} & \textbf{Example}\\
+\midrule
+Decimal & \texttt{25} (no suffix)\\
+Binary & \texttt{11001B}\\
+Hexadecimal & \texttt{19H}; if the first hex digit is A--F, prefix a zero: \texttt{0A06H}.\\
+Character & \texttt{'A'}; assembler stores its ASCII code (41H).\\
+String & \texttt{MSG DB "HELLO\$"}; DOS function 09H expects a trailing dollar sign.\\
+Byte & \texttt{DB} reserves/defines 8 bits.\\
+Word & \texttt{DW} reserves/defines 16 bits.\\
+\bottomrule
+\end{tabularx}
+A byte can represent an unsigned value from 0 to 255 or a signed two's-complement value from -128 to +127. A word can represent an unsigned value from 0 to 65535 or a signed value from -32768 to +32767. The bit pattern is the same; interpretation changes.
+
+\subsection{Variables and the data segment}
+Examples:
+\begin{lstlisting}[style=asm]
+.DATA
+COUNT   DB  5
+VALUE   DW  1234
+RESULT  DW  ?
+LETTER  DB  'A'
+MESSAGE DB  'HELLO WORLD$'
+BUFFER  DB  10 DUP(?)
+\end{lstlisting}
+\texttt{?} reserves storage without assigning an initial value. \texttt{DUP} repeats a declaration. Variables declared in \texttt{.DATA} are accessed through DS. The supplied template initializes DS as follows:
+\begin{lstlisting}[style=asm]
+MOV AX, @DATA
+MOV DS, AX
+\end{lstlisting}
+
+\section{EMU8086 and the program template}
+The Lab 01 sheet introduces EMU8086's New/COM Template, Compile, Emulate, Run, Single Step, register display, and ASCII table. Use \textbf{Single Step} to see how each instruction changes registers and flags. The register panel is shown in hexadecimal, even when your source used decimal constants.
+
+\subsection{The supplied MASM-style template}
+Use the provided \texttt{Assembly Template.docx} as the baseline. The structure is:
+\begin{lstlisting}[style=asm]
+.MODEL SMALL
+.STACK 100H
+.DATA
+    ; variables and strings
+.CODE
+MAIN PROC
+    ; initialize data segment
+    MOV AX, @DATA
+    MOV DS, AX
+
+    ; program instructions go here
+
+    ; return to DOS
+    MOV AX, 4C00H
+    INT 21H
+MAIN ENDP
+END MAIN
+\end{lstlisting}
+\textbf{Important:} Any solution below that says ``insert in MAIN'' belongs after DS initialization and before the exit instructions. Data declarations belong in \texttt{.DATA}. Reusable procedures belong after \texttt{MAIN ENDP} and before \texttt{END MAIN}.
+
+\section{Instruction fundamentals}
+\subsection{MOV -- copy data}
+Syntax: \texttt{MOV destination, source}. The source is copied; it is not erased. Examples:
+\begin{lstlisting}[style=asm]
+MOV AX, 10       ; immediate to register
+MOV BX, AX       ; register to register
+MOV AL, COUNT    ; memory byte to byte register
+MOV RESULT, AX   ; word register to memory word
+MOV DS, AX       ; general register to segment register
+\end{lstlisting}
+Rules:
+\begin{itemize}
+\item Source and destination sizes must match.
+\item Memory-to-memory \texttt{MOV} is not allowed in one instruction. Use a register as an intermediate.
+\item An immediate value cannot be moved directly into a segment register; load it through a general register.
+\item \texttt{MOV} does not change arithmetic flags.
+\end{itemize}
+
+\subsection{ADD and SUB}
+\texttt{ADD destination, source} computes destination + source. \texttt{SUB destination, source} computes destination - source. The result is stored in the destination.
+\begin{lstlisting}[style=asm]
+MOV AX, 12
+MOV BX, 4
+ADD AX, BX       ; AX = 16
+SUB AX, 5        ; AX = 11
+\end{lstlisting}
+The destination is overwritten. If unsigned subtraction goes below zero, the fixed-width bit pattern wraps modulo $2^n$ and CF indicates a borrow. Example: 3-5 in an 8-bit register becomes FDH (253 unsigned, -3 signed).
+
+\subsection{INC, DEC, NEG}
+\begin{lstlisting}[style=asm]
+INC AX           ; AX = AX + 1
+DEC BX           ; BX = BX - 1
+NEG CX           ; CX = 0 - CX (two's-complement negation)
+\end{lstlisting}
+\texttt{INC} and \texttt{DEC} affect status flags except CF. \texttt{NEG} computes the two's-complement negative. Negating the most-negative signed value (80H for a byte or 8000H for a word) cannot be represented in the same width and sets OF.
+
+\subsection{MUL -- unsigned multiplication}
+\begin{tabularx}{\linewidth}{lXX}
+\toprule \textbf{Form} & \textbf{Implicit operand} & \textbf{Result}\\
+\midrule
+\texttt{MUL r/m8} & AL $\times$ 8-bit source & AX (16-bit product)\\
+\texttt{MUL r/m16} & AX $\times$ 16-bit source & DX:AX (32-bit product); DX is high word, AX low word.\\
+\bottomrule
+\end{tabularx}
+Example:
+\begin{lstlisting}[style=asm]
+MOV AL, 12
+MOV BL, 3
+MUL BL           ; AX = 36
+
+MOV AX, 1234H
+MOV BX, 10
+MUL BX           ; DX:AX = AX * BX
+\end{lstlisting}
+The source is a register or memory operand, not an immediate constant. The accumulator is implicit.
+
+\subsection{DIV -- unsigned division}
+\begin{tabularx}{\linewidth}{lXX}
+\toprule \textbf{Form} & \textbf{Dividend} & \textbf{After division}\\
+\midrule
+\texttt{DIV r/m8} & AX (16 bits) & AL = quotient, AH = remainder\\
+\texttt{DIV r/m16} & DX:AX (32 bits) & AX = quotient, DX = remainder\\
+\bottomrule
+\end{tabularx}
+Before a simple 16-bit-by-16-bit division where the dividend is just AX, clear DX:
+\begin{lstlisting}[style=asm]
+MOV AX, 100
+MOV DX, 0
+MOV BX, 9
+DIV BX            ; AX = 11, DX = 1
+\end{lstlisting}
+Never divide by zero. The quotient must fit in AL or AX for the selected DIV form, or a divide error occurs. A frequent mistake is forgetting to clear AH before byte division or DX before word division.
+
+\subsection{Addressing mode vocabulary}
+The following examples explain where an instruction gets its operand:
+\begin{longtable}{p{0.23\linewidth}p{0.3\linewidth}p{0.4\linewidth}}
+\toprule \textbf{Mode} & \textbf{Example} & \textbf{Meaning}\\
+\midrule
+Immediate & \texttt{MOV AX, 25} & Constant 25 is encoded in the instruction.\\
+Register & \texttt{MOV AX, BX} & Operand is in a register.\\
+Direct memory & \texttt{MOV AL, [1200H]} & Memory offset is stated explicitly.\\
+Register indirect & \texttt{MOV AL, [BX]} & BX contains the memory offset.\\
+Based/indexed & \texttt{MOV AL, [BX+SI]} & Effective address is formed from base/index registers.\\
+Based/indexed + displacement & \texttt{MOV AX, [BX+SI+4]} & Effective address also includes a constant displacement.\\
+\bottomrule
+\end{longtable}
+In the supplied basic template, most early exercises use immediate, register, and direct variable operands. Brackets indicate memory contents at an address; they are not the same as the register's numeric value.
+
+\section{DOS input and output: INT 21H}
+An interrupt is a software request to a system service. For the lab exercises, the main DOS interrupt is \texttt{INT 21H}. Put the function number in AH before calling it.
+\begin{longtable}{p{0.17\linewidth}p{0.25\linewidth}p{0.48\linewidth}}
+\toprule \textbf{AH} & \textbf{Service} & \textbf{Required/result registers}\\
+\midrule
+01H & Read one character with echo & Character's ASCII code returned in AL.\\
+02H & Display one character & Character must be in DL.\\
+09H & Display a string & DS:DX points to a string ending in \texttt{\$}.\\
+4CH & Terminate program & AL may contain return code; common exit is \texttt{MOV AX,4C00H / INT 21H}.\\
+\bottomrule
+\end{longtable}
+Examples:
+\begin{lstlisting}[style=asm]
+; Read a character
+MOV AH, 1
+INT 21H             ; AL = ASCII character
+MOV BL, AL          ; save it before another DOS call
+
+; Display one character
+MOV DL, 'A'
+MOV AH, 2
+INT 21H
+
+; Display a string
+LEA DX, MESSAGE
+MOV AH, 9
+INT 21H
+\end{lstlisting}
+\begin{importantbox}
+\textbf{Preserve values before another INT 21H call.} The DOS function call uses AX/AH and may change AL. If a character or arithmetic value in AL is needed later, copy it to another register or memory variable first.
+\end{importantbox}
+
+\subsection{New line: carriage return and line feed}
+Use both characters in this order:
+\begin{itemize}
+\item Carriage Return (CR) = 0DH = 13 decimal.
+\item Line Feed (LF) = 0AH = 10 decimal.
+\end{itemize}
+A data string begins a new line with \texttt{DB 0DH,0AH,'TEXT\$'}. The Lab 02 sheet's printed decimal labels beside CR/LF are transposed; the hexadecimal values above are the standard DOS values and are used throughout this workbook.
+
+\subsection{ASCII conversions}
+\begin{tabularx}{\linewidth}{lX}
+\toprule \textbf{Goal} & \textbf{Operation}\\
+\midrule
+ASCII digit to numeric & \texttt{SUB AL,'0'} or \texttt{SUB AL,30H}.\\
+Numeric digit to ASCII & \texttt{ADD DL,'0'} or \texttt{ADD DL,30H}.\\
+Uppercase A--Z to lowercase & Add 20H (only after verifying it is uppercase).\\
+Lowercase a--z to uppercase & Subtract 20H (only after verifying it is lowercase).\\
+Hex character A--F to numeric 10--15 & \texttt{SUB AL,37H}. For 0--9, subtract 30H.\\
+\bottomrule
+\end{tabularx}
+ASCII values worth memorizing: \texttt{'0'}=30H, \texttt{'9'}=39H, \texttt{'A'}=41H, \texttt{'Z'}=5AH, \texttt{'a'}=61H, \texttt{'z'}=7AH, space=20H, CR=0DH, LF=0AH.
+
+\section{Flags: the foundation of decisions}
+A flag is a bit in FLAGS describing the result of an operation or controlling CPU behavior. Lab 02 divides flags into status flags and control flags. The principal status flags for this midterm are:
+\begin{longtable}{p{0.18\linewidth}p{0.73\linewidth}}
+\toprule \textbf{Flag} & \textbf{Meaning}\\
+\midrule
+CF -- Carry & Unsigned carry out of the most significant bit in addition; borrow in subtraction.\\
+PF -- Parity & 1 if the low byte of the result contains an even number of 1 bits.\\
+AF -- Auxiliary carry & Carry from bit 3 to bit 4 (or borrow across that nibble boundary). Mainly relevant to BCD adjustment.\\
+ZF -- Zero & 1 if the result is zero.\\
+SF -- Sign & Copy of the result's most significant bit. For signed interpretation, 1 means negative.\\
+OF -- Overflow & 1 if the signed result is outside the representable range.\\
+\bottomrule
+\end{longtable}
+Control flags in the supplied diagram include TF (trap), IF (interrupt enable), and DF (direction).
+
+\subsection{CF and OF are not the same}
+\begin{itemize}
+\item CF answers: did an unsigned carry/borrow occur?
+\item OF answers: did signed two's-complement arithmetic overflow?
+\end{itemize}
+For 8-bit addition, $80H+80H=100H$. Stored result is 00H. CF=1, OF=1, ZF=1, SF=0, PF=1, AF=0. The companion solution sheet explicitly corrects an inconsistency in the notes: the notes list AF=1 for this calculation, but the low nibbles are 0+0, so there is no carry from bit 3 to bit 4 and AF must be 0.
+
+\subsection{Signed overflow rule}
+For addition:
+\begin{itemize}
+\item Positive + positive gives a negative-looking result: OF=1.
+\item Negative + negative gives a positive-looking result: OF=1.
+\item Opposite signs cannot overflow in addition.
+\end{itemize}
+Equivalently, OF is set when the carry into the sign bit differs from the carry out of the sign bit. For two positive operands: carry into MSB but no carry out. For two negative operands: carry out of MSB but no carry in.
+
+\subsection{Which instructions affect flags?}
+\begin{tabularx}{\linewidth}{lX}
+\toprule \textbf{Instruction} & \textbf{Effect}\\
+\midrule
+MOV & Does not change flags.\\
+ADD/SUB & Updates status flags.\\
+INC/DEC & Updates status flags except CF.\\
+NEG & Updates status flags; CF is 1 for a non-zero operand and 0 for zero; OF is set for the most-negative value.\\
+CMP & Performs destination - source only for flags; does not save the subtraction result.\\
+TEST & Performs bitwise AND only for flags; does not save the result.\\
+\bottomrule
+\end{tabularx}
+To inspect flags in EMU8086, single-step immediately after the arithmetic instruction. The FLAGS window is the best way to confirm a hand calculation.
+
+\section{CMP and conditional jumps}
+\subsection{CMP is a subtraction for flags only}
+Syntax: \texttt{CMP destination, source}. Internally it evaluates destination - source and updates flags, but the result is discarded. A following jump reads those flags.
+\begin{lstlisting}[style=asm]
+CMP AX, BX       ; compare AX with BX
+JE  EQUAL       ; branch if equal
+JG  AX_GREATER  ; signed greater-than
+JL  AX_LESS     ; signed less-than
+\end{lstlisting}
+
+\subsection{Jump table}
+\begin{longtable}{llll}
+\toprule \textbf{Meaning} & \textbf{Signed} & \textbf{Unsigned} & \textbf{Equal/zero}\\
+\midrule
+Equal & -- & -- & JE / JZ\\
+Not equal & -- & -- & JNE / JNZ\\
+Greater & JG & JA & \\
+Greater or equal & JGE & JAE & \\
+Less & JL & JB & \\
+Less or equal & JLE & JBE & \\
+Carry set / clear & -- & JC / JNC & \\
+Sign set / clear & JS / JNS & -- & \\
+Overflow set / clear & JO / JNO & -- & \\
+\bottomrule
+\end{longtable}
+\textbf{Critical choice:} use signed jumps (JG/JL/JGE/JLE) for signed values and unsigned jumps (JA/JB/JAE/JBE) for unsigned values. ASCII character codes and non-negative digit values are normally compared as unsigned. A signed value like -1 is FFFFH, which is larger than 1 if interpreted unsigned but smaller if interpreted signed.
+
+\subsection{IF-THEN pattern}
+\begin{lstlisting}[style=asm]
+; if (AX < 0) AX = -AX;
+CMP AX, 0
+JGE DONE
+NEG AX
+DONE:
+\end{lstlisting}
+\subsection{IF-THEN-ELSE pattern}
+\begin{lstlisting}[style=asm]
+; if (AX > BX) use AX, else use BX
+CMP AX, BX
+JG  USE_AX
+; ELSE block
+MOV DX, BX
+JMP FINISH
+USE_AX:
+MOV DX, AX
+FINISH:
+\end{lstlisting}
+The unconditional \texttt{JMP FINISH} is important: without it, after running the true block the processor could fall through and also execute the else block.
+
+\subsection{CASE / multiway branch pattern}
+A CASE is implemented as a sequence of comparisons and conditional jumps. Every branch that must skip the remaining cases should jump to the common end label.
+\begin{lstlisting}[style=asm]
+CMP AL, 1
+JE  CASE_1
+CMP AL, 2
+JE  CASE_2
+CMP AL, 3
+JE  CASE_3
+JMP CASE_END
+CASE_1:
+    ; statements for value 1
+    JMP CASE_END
+CASE_2:
+    ; statements for value 2
+    JMP CASE_END
+CASE_3:
+    ; statements for value 3
+CASE_END:
+\end{lstlisting}
+
+\section{Looping structures}
+A loop repeats instructions. Lab 03(B) distinguishes explicit and implicit loops and introduces repeat-until behavior.
+
+\subsection{Explicit loop -- CMP and JMP}
+An explicit loop is similar to a while loop: test the condition, exit if the condition is false, execute the body, update the counter, and jump back.
+\begin{lstlisting}[style=asm]
+; print characters '0' through '4'
+MOV DL, '0'
+START:
+    CMP DL, '5'
+    JGE END_LOOP
+    MOV AH, 2
+    INT 21H
+    INC DL
+    JMP START
+END_LOOP:
+\end{lstlisting}
+The check happens before the body, so this is a pre-test loop. The example compares ASCII values because DL contains ASCII characters.
+
+\subsection{Implicit loop -- LOOP and CX}
+\texttt{LOOP label} automatically decrements CX and jumps if CX is not zero. CX must be loaded before the loop.
+\begin{lstlisting}[style=asm]
+MOV CX, 5
+MOV DL, '0'
+START:
+    MOV AH, 2
+    INT 21H
+    INC DL
+    LOOP START
+\end{lstlisting}
+This prints 0 through 4. If CX starts at 5, the body executes five times. Do not manually decrement CX as well as use LOOP, or the count will be wrong. Note that if CX is initially 0 and LOOP is executed, it decrements to FFFFH and loops many times; initialize CX to a positive count.
+
+\subsection{Repeat-until loop}
+A repeat-until loop executes the body first and checks the exit condition after the body. In assembly, use a label, compare, and a conditional jump back:
+\begin{lstlisting}[style=asm]
+REPEAT:
+    MOV AH, 1
+    INT 21H
+    MOV BL, AL
+    MOV DL, AL
+    MOV AH, 2
+    INT 21H
+    CMP BL, ' '
+    JNE REPEAT
+; stops after the user enters a space
+\end{lstlisting}
+This is post-test behavior: the body runs at least once.
+
+\subsection{Nested loops}
+A nested loop places one loop inside another. The outer loop controls rows; the inner loop controls columns. Example pattern:
+\begin{lstlisting}[style=asm]
+; Conceptual structure: rows=1..N, print 1..row
+MOV BL, 1          ; row
+OUTER:
+    MOV BH, 1      ; column
+INNER:
+    ; print BH as an ASCII digit
+    INC BH
+    CMP BH, BL
+    JLE INNER
+    ; print CR/LF
+    INC BL
+    CMP BL, N
+    JLE OUTER
+\end{lstlisting}
+For loops with two counters, do not overwrite the outer counter inside the inner loop. Use different registers or memory variables.
+
+\section{Reusable coding patterns}
+\subsection{Read and convert one decimal digit}
+\begin{lstlisting}[style=asm]
+MOV AH, 1
+INT 21H          ; AL = ASCII '0'..'9'
+SUB AL, '0'      ; AL = numeric 0..9
+\end{lstlisting}
+\subsection{Print one numeric digit}
+\begin{lstlisting}[style=asm]
+ADD DL, '0'      ; numeric 0..9 -> ASCII
+MOV AH, 2
+INT 21H
+\end{lstlisting}
+This direct conversion only prints one decimal digit. A value like 12 must be converted to two digits (or passed to a decimal-print routine).
+
+\subsection{Test even or odd}
+\begin{lstlisting}[style=asm]
+TEST AL, 1
+JZ EVEN_NUMBER
+; odd branch
+JMP CHECK_DONE
+EVEN_NUMBER:
+; even branch
+CHECK_DONE:
+\end{lstlisting}
+The least significant bit is 0 for even and 1 for odd.
+
+\subsection{Test divisibility}
+To test if an unsigned 16-bit number is divisible by a divisor:
+\begin{lstlisting}[style=asm]
+MOV AX, NUMBER
+XOR DX, DX
+MOV BX, DIVISOR
+DIV BX
+CMP DX, 0       ; remainder is in DX
+JE  DIVISIBLE
+\end{lstlisting}
+For a byte divisor and byte-sized quotient, use AX as dividend and inspect AH for the remainder. Choose the DIV form according to the dividend and expected quotient size.
+
+\subsection{Unsigned decimal printing concept}
+To print a multi-digit unsigned value, repeatedly divide it by 10. Each remainder is the last digit. Save remainders on the stack, then pop and print them in reverse order. The companion solution file provides a complete \texttt{PRINT\_U16} helper and a signed wrapper.
+
+\section{High-frequency mistakes and how to avoid them}
+\begin{enumerate}
+\item \textbf{Forgetting DS initialization.} Variables may read incorrectly if DS is not set to @DATA.
+\item \textbf{Using mismatched sizes.} Do not add an 8-bit register to a 16-bit register.
+\item \textbf{Memory-to-memory arithmetic.} Move one operand into a register first.
+\item \textbf{Forgetting implicit MUL/DIV registers.} MUL uses AL or AX; DIV uses AX or DX:AX.
+\item \textbf{Not clearing the high half before division.} Clear AH before a byte dividend or DX before a simple word dividend.
+\item \textbf{Using immediate constants with MUL/DIV.} Load the divisor/multiplier into a register or memory variable.
+\item \textbf{Confusing ASCII with numeric values.} Keyboard input '7' is 37H, not numeric 7.
+\item \textbf{Printing a number as a character.} Add 30H only for a single decimal digit. Use a decimal conversion routine for multi-digit numbers.
+\item \textbf{Using a signed jump on an unsigned number.} Decide whether the operands are signed or unsigned before choosing the jump.
+\item \textbf{Forgetting JMP at the end of the IF block.} This can cause unintended fall-through into ELSE.
+\item \textbf{Incorrect LOOP count.} LOOP decrements CX automatically.
+\item \textbf{Clobbering CX in a nested loop.} Keep the outer count safe.
+\item \textbf{Ignoring division by zero or quotient overflow.} Check the divisor and make sure the quotient fits.
+\end{enumerate}
+
+\section{Lab-by-lab checklist}
+\subsection{Lab 01 -- Introduction and basic arithmetic}
+Be able to explain registers, memory, assembler vs machine code, number suffixes, DB/DW, and the EMU8086 single-step view. Practise MOV, ADD, SUB, INC, DEC, NEG, MUL, and DIV. Be able to swap values with a temporary register and with ADD/SUB. Understand why a 16-bit multiply produces DX:AX.
+
+\subsection{Lab 02 -- Basic I/O, advanced arithmetic, and flags}
+Memorize INT 21H functions 01H, 02H, 09H, and 4CH. Practise prompts, character input/output, string output, CR/LF, ASCII conversion, one-digit arithmetic, hex digit conversion, and a 10x10 text box. Be able to state CF, PF, AF, ZF, SF, and OF after an operation and explain signed overflow.
+
+\subsection{Lab 03(A) -- Flow control and branching}
+Know JMP, CMP, signed and unsigned conditional jumps. Convert IF, IF-ELSE, and CASE into labels and jumps. Practise absolute value, sign classification, character range checking, even/odd, vowel/consonant, divisibility, min/max, triangle validity, range mapping, weekday, and month-day selection.
+
+\subsection{Lab 03(B) -- Looping structures}
+Know explicit loops, LOOP/CX, repeat-until, and nested loops. Practise fixed-count printing, arithmetic series, repeated-addition multiplication, character ranges, repeated hex conversion with validation, longest increasing run, divisibility sums, number patterns, and leap-year checking.
+
+\section{Practice before checking the solution workbook}
+Try each without looking at the companion file. Write pseudocode first, identify registers and variables, then write the assembly.
+\begin{enumerate}
+\item Explain why 8086 has a 20-bit address bus but 16-bit general registers.
+\item After \texttt{MOV AX,1234H}, what are AH and AL? What happens after \texttt{MOV AL,0FFH}?
+\item State the result and flags for 8-bit \texttt{FFH + 01H}.
+\item State the difference between CF and OF. Give one example of each.
+\item What is in AL and AH after \texttt{MOV AX,0017H / MOV BL,05H / DIV BL}?
+\item Why is \texttt{MOV [A],[B]} invalid? Rewrite it.
+\item Which jump should compare two unsigned numbers? Which jump should compare signed numbers?
+\item Trace CX after each execution of \texttt{LOOP AGAIN} when CX starts at 3.
+\item Convert the pseudocode ``while x is less than 5, print x and increment x'' into assembly.
+\item Convert ``read characters until space, printing each one'' into a repeat-until loop.
+\end{enumerate}
+
+\section{Viva questions: one-line answers}
+\begin{enumerate}
+\item \textbf{What is an assembler?} A program that translates assembly mnemonics into machine/object code.
+\item \textbf{What is a mnemonic?} A human-readable symbolic name for an instruction, such as MOV or ADD.
+\item \textbf{What is the accumulator?} AX (and AL for byte operations) is the implicit accumulator for several arithmetic instructions.
+\item \textbf{What does LEA do?} Loads the effective offset address of a memory operand into a register.
+\item \textbf{What does INT 21H do?} Invokes DOS services selected by AH.
+\item \textbf{Where does AH=01H return input?} AL.
+\item \textbf{Where must a function 02H output character be placed?} DL.
+\item \textbf{Why does function 09H need a dollar sign?} It uses '\$' as the string terminator.
+\item \textbf{Does CMP save a result?} No; it only updates flags.
+\item \textbf{Does MOV change flags?} No.
+\item \textbf{What does LOOP use?} CX, decrementing it before deciding whether to jump.
+\item \textbf{Difference between explicit and implicit loop?} Explicit uses compare/jumps and manual updates; implicit uses LOOP with CX.
+\item \textbf{Difference between while and repeat-until?} While tests before the body; repeat-until tests after the body.
+\end{enumerate}
+
+\section{Final-night revision plan}
+\begin{tcolorbox}[colback=greenish,colframe=green!45!black,title=Suggested 3-hour sequence]
+\begin{enumerate}
+\item 25 min: registers, data declarations, template, number formats.
+\item 30 min: MOV/ADD/SUB/INC/DEC/NEG/MUL/DIV and trace results.
+\item 25 min: INT 21H, ASCII, and decimal conversion.
+\item 30 min: flags, CMP, signed/unsigned jumps, IF/ELSE/CASE.
+\item 30 min: explicit/implicit/repeat-until/nested loops.
+\item 40 min: solve selected lab tasks and at least one complete sample paper under time pressure.
+\end{enumerate}
+\end{tcolorbox}
+
+\begin{center}\Large\bfseries You are ready when you can write the control flow without memorizing line by line.\end{center}
+\end{document}
